@@ -42,6 +42,9 @@ Write-Host "==> 复制配置示例与脚本..."
 Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "scripts\autostart.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "StartDeadlock.bat") (Join-Path $Stage "StartDeadlock.bat")
+# 双击即用的自启安装/卸载包装(内部自动处理路径)
+Copy-Item (Join-Path $Root "install-autostart.bat") (Join-Path $Stage "install-autostart.bat")
+Copy-Item (Join-Path $Root "remove-autostart.bat") (Join-Path $Stage "remove-autostart.bat")
 
 Write-Host "==> 复制内置 Node 运行时..."
 Copy-Item (Join-Path $Root "portable-node\node.exe") (Join-Path $Stage "portable-node\node.exe")
