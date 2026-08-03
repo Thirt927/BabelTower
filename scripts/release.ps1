@@ -25,7 +25,7 @@ param(
   [switch]$Force
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"  # 原生命令(git/gh)的 stderr 不中断流程,改为显式检查退出码
 $Root = Split-Path -Parent $PSScriptRoot
 $Dist = Join-Path $Root "dist"
 
@@ -65,13 +65,19 @@ if ($Build) {
   if (-not (Test-Path $Csdk12Root)) { Fail "CSDK 根目录不存在: $Csdk12Root" }
   Step "编译 VPK..."
   if ($WhatIf) { Write-Host "  (WhatIf) 运行 build.ps1" }
-  else { powershell -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\build.ps1") -Csdk12Root $Csdk12Root }
+  else {
+    powershell -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\build.ps1") -Csdk12Root $Csdk12Root
+    if ($LASTEXITCODE -ne 0) { Fail "build.ps1 失败(exit=$LASTEXITCODE)" }
+  }
 }
 
 # ---------- 打包 ----------
 Step "打包完整安装包..."
 if ($WhatIf) { Write-Host "  (WhatIf) 运行 package_release.ps1 -Version $Version" }
-else { powershell -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\package_release.ps1") -Version $Version }
+else {
+  powershell -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\package_release.ps1") -Version $Version
+  if ($LASTEXITCODE -ne 0) { Fail "package_release.ps1 失败(exit=$LASTEXITCODE)" }
+}
 
 $Zip = Join-Path $Dist "BabelTower-$Version-win64.zip"
 $Vpk = Join-Path $Dist "pak01_dir.vpk"
@@ -131,8 +137,9 @@ $next = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
 Step "版本号自增: $Version -> $next"
 [System.IO.File]::WriteAllText((Join-Path $Root "VERSION"), $next + "`n", (New-Object System.Text.UTF8Encoding($false)))
 git add VERSION
-git commit -m "Bump version to $next" | Out-Null
+git commit -m "Bump version to $next" 2>&1 | Out-Null
 git push origin main 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { Fail "git push 失败,请手动推送" }
 
 Write-Host ""
 Write-Host "发布完成: https://github.com/c1375rick/BabelTower/releases/tag/$Tag" -ForegroundColor Green
