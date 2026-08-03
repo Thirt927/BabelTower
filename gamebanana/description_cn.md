@@ -1,0 +1,51 @@
+# Babel Tower - Deadlock 聊天翻译 Mod
+
+《Deadlock》游戏内实时聊天翻译:队友的外语消息自动翻译,金色译文显示在原消息下方;也支持发送前把消息翻译成目标语言(仅译文 / 原文|译文 双语)。
+
+**无需注册任何账号** —— 默认使用 Bing 公共免费翻译接口(国内直连可用);可选 Microsoft Azure。
+
+## 功能
+
+- 入站消息实时翻译,译文以金色粗体显示在原文下方
+- 发送前翻译:关 / 仅译文 / 双语(原文 | 译文)三态
+- 设置面板:聊天输入 `/tr` 回车,或点聊天框右侧「译」按钮
+- 所有选项均为点击选择(服务商 / 目标语言 / 显示模式 / 发送模式),减少误操作
+- 本地桥随 Windows 登录自启,游戏退出自动关闭
+- 智能跳过:自己的消息、指令(/ 开头)、纯数字符号、已是目标语言的文本
+- 译文缓存:聊天滚动回收后自动重建译文
+
+## 安装(3 步)
+
+1. 解压压缩包到任意位置(建议路径不带空格,如 D:\BabelTower)
+2. 安装游戏内 Mod:把 `pak01_dir.vpk` 拖入 **Deadlock Mod Manager**,或复制到
+   `game\citadel\addons\`(已有同名文件就改个空闲编号,如 `pak25_dir.vpk`)
+3. 启动本地桥(二选一):
+   - **推荐(一劳永逸)**:执行一次
+     `powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install`
+     (开机自启桥,游戏退出自动关闭)
+   - **临时**:每次玩之前双击 `StartDeadlock.bat`
+
+4. 进游戏:Enter 开聊天 → 输入 `/tr` → 点**测试**(应显示"测试成功: 你好")→ **保存** → ESC 关闭。完成!
+
+> 无需安装 Node.js —— 压缩包已内置便携版运行时。
+
+## 设置项
+
+| 设置 | 选项 |
+| --- | --- |
+| 服务商 | bing(免 Key,默认)/ microsoft(Azure Key) |
+| 目标语言 | 简体中文 / 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español / 自定义 |
+| 显示模式 | 双语(原文+译文)/ 仅译文 |
+| 发送前翻译 | 关 / 仅译文 / 双语(原文 \| 译文) |
+| 发送目标语言 | 同上语言列表 |
+
+## 环境要求
+
+- Windows 10/11 + Deadlock(Steam)
+- 默认服务商需要能访问 bing.com 的网络
+
+## 说明
+
+- LGPL-3.0 协议;源代码:https://github.com/c1375rick/BabelTower
+- Bing 公共接口偶发限流,会自动重试;你所在地区不稳定时可切换 Microsoft 服务商
+- 本 Mod 与 Valve 无关
