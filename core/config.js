@@ -69,7 +69,13 @@ function load() {
   } catch (e) {
     // 配置损坏时回退默认值,不崩溃
   }
-  return normalize({});
+  // 首次运行:用默认值自动生成 config.json,方便用户后续查看/调整
+  const defaults = normalize({});
+  try {
+    fs.mkdirSync(configDir(), { recursive: true });
+    fs.writeFileSync(configPath(), JSON.stringify(defaults, null, 2), "utf8");
+  } catch (e) {}
+  return defaults;
 }
 
 function save(cfg) {
