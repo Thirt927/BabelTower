@@ -20,10 +20,9 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
       如果该目录已有同名文件,改成别的编号,如 pak25_dir.vpk
 
 3. 启动本地桥(二选一):
-   方法 A(推荐,一劳永逸):右键"以管理员身份运行"下面的命令(或打开 PowerShell 执行):
-     cd /d 你的解压路径(如 cd /d D:\BabelTower)
-     powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
+   方法 A(推荐,一劳永逸):**双击 install-autostart.bat**(安装开机自启)
      之后开机自动启动桥,游戏退出桥自动关闭,什么都不用管。
+     卸载自启:双击 remove-autostart.bat
    方法 B(临时):双击 StartDeadlock.bat(每次玩之前都要双击一次)
 
 4. 启动游戏,进任意一局(训练场也行):
@@ -74,7 +73,9 @@ A: 游戏部分:Mod Manager 里禁用/删除,或删掉 addons 里对应的 vpk�
   pak01_dir.vpk          游戏内 Mod(装进 Deadlock addons)
   core\                  本地翻译桥(不要删)
   portable-node\         内置 Node.js 运行时(不要删)
-  scripts\autostart.ps1  开机自启安装/卸载
+  install-autostart.bat  双击安装开机自启
+  remove-autostart.bat   双击卸载开机自启
   StartDeadlock.bat      手动启动(桥 + 游戏)
+  scripts\autostart.ps1  自启脚本(一般由上面的 bat 调用,无需手动执行)
 
 更多说明见 README.md;源代码与构建方法见 GitHub 仓库。
