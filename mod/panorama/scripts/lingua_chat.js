@@ -14,7 +14,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "0.1.0";
+  const VERSION = "0.1.1";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -49,7 +49,7 @@
   const RETRY_DELAY_SECONDS = 0.4;
   const CACHE_LIMIT = 300;
   const SEEN_LIMIT = 500;
-  const MAX_ACTIVE_REQUESTS = 1; // MVP:串行翻译,避免乱序与端口压力
+  const MAX_ACTIVE_REQUESTS = 3; // 小并发:加快队列排空,降低快捷对话过期竞争
   const UNKNOWN_NAME = "<unknown>";
 
   // ---- 本地桥 ----
@@ -345,13 +345,19 @@
     try {
       label.text = String(text);
     } catch (e) {}
-    // 只显示译文模式:隐藏原文
+    // 只显示译文模式:隐藏原文(快捷对话/Ping 行保留气泡,避免消息"消失")
     if (State.cfg.displayMode === "translation_only") {
       const contents = findChild(row, MESSAGE_CONTENTS_ID);
       if (contents) {
+        let isPing = false;
         try {
-          contents.style.visibility = "collapse";
+          isPing = hasClass(contents, "Ping") || !!findChild(contents, "PingLabel");
         } catch (e) {}
+        if (!isPing) {
+          try {
+            contents.style.visibility = "collapse";
+          } catch (e) {}
+        }
       }
     }
   }
@@ -649,8 +655,11 @@
     if (payload.ok && payload.translation) {
       State.cache.set(job.sig, { translation: payload.translation });
       trimCache();
-      injectTranslation(job.row, job.sig, payload.translation);
-      log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + payload.translation.slice(0, 60));
+      // 行可能已被回收复用:只有行仍持有同一条消息时才注入,避免旧译文贴到新消息
+      if (isValid(job.row) && job.row.__lctSig === job.sig) {
+        injectTranslation(job.row, job.sig, payload.translation);
+        log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + payload.translation.slice(0, 60));
+      }
       finishJob();
     } else {
       failJob(job, payload.error || "unknown_error");
@@ -665,7 +674,9 @@
       $.Schedule(RETRY_DELAY_SECONDS, pumpQueue);
       log("retry (" + job.attempts + "): " + String(error).slice(0, 80));
     } else {
-      injectError(job.row, job.sig, String(error || "unknown_error").slice(0, 120));
+      if (isValid(job.row) && job.row.__lctSig === job.sig) {
+        injectError(job.row, job.sig, String(error || "unknown_error").slice(0, 120));
+      }
       log("failed: " + String(error).slice(0, 80));
     }
     finishJob();
@@ -703,6 +714,30 @@
     return isValid(State.messages) ? State.messages : null;
   }
 
+  // 回收复用清理:聊天行被游戏复用时,清除本 mod 残留(旧译文标签 + 原文折叠样式)
+  function resetRowModState(row) {
+    try {
+      const contents = findChild(row, MESSAGE_CONTENTS_ID);
+      if (contents && contents.style) {
+        contents.style.visibility = "visible";
+      }
+    } catch (e) {}
+    const body = findClass(row, MESSAGE_BODY_CLASS) || row;
+    const count = childCount(body);
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const child = childAt(body, i);
+      if (!isValid(child)) continue;
+      if (!hasClass(child, TRANS_LABEL_CLASS)) continue;
+      try {
+        child.DeleteAsync(0);
+      } catch (e) {
+        try {
+          child.RemoveAndDeleteChildren();
+        } catch (e2) {}
+      }
+    }
+  }
+
   function processRow(row) {
     if (!isValid(row)) return false;
     const record = readMessageRow(row);
@@ -718,6 +753,7 @@
     }
     if (prevSig !== sig) {
       row.__lctProcessed = false;
+      resetRowModState(row);
     }
     row.__lctSig = sig;
     row.__lctProcessed = true;
