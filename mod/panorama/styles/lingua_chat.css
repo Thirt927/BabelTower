@@ -1,0 +1,309 @@
+/* Babel Tower - 聊天翻译 UI 样式
+   仅使用 Source 2 Panorama 支持的 CSS(flow-children / align / visibility 等),
+   技术写法参照已发布的同类 mod(如 DLCT)验证过的模式。 */
+
+/* ---- 隐藏 HTML 桥面板(2x2 透明,不参与交互) ---- */
+.LCTBridgePanel {
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+  horizontal-align: left;
+  vertical-align: top;
+  margin-left: -4px;
+  margin-top: -4px;
+  z-index: -1;
+  hittest: false;
+  hittestchildren: false;
+}
+
+/* ---- 设置按钮(输入框右侧的"译") ---- */
+.LCTSettingsButton {
+  background-color: rgba(18, 22, 32, 0.85);
+  border: 1px solid rgba(255, 210, 127, 0.55);
+  border-radius: 3px;
+  color: #ffd27f;
+  font-size: 13px;
+  font-weight: bold;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0px 8px;
+  vertical-align: middle;
+  width: 30px;
+}
+
+.LCTSettingsButton:hover {
+  background-color: rgba(255, 210, 127, 0.18);
+}
+
+/* ---- 设置面板(默认隐藏,居中弹窗) ---- */
+.LCTSettingsPanel {
+  align: center center;
+  width: 640px;
+  height: 560px;
+  background-color: gradient( linear, 0% 0%, 0% 100%, from( #141a20 ), color-stop( 0.48, #0e1318 ), to( #0a0d10 ) );
+  border: 1px solid rgba(255, 252, 244, 0.08);
+  border-radius: 6px;
+  box-shadow: rgba(0, 0, 0, 0.45) 0px 16px 34px 0px;
+  flow-children: down;
+  z-index: 5000;
+  visibility: collapse;
+}
+
+.LCTSettingsPanel.LCTVisible {
+  visibility: visible;
+}
+
+/* 标题栏 */
+.LCTSettingsHeader {
+  width: 100%;
+  height: 50px;
+  background-color: gradient( linear, 0% 0%, 0% 100%, from( #1b2128 ), to( #13181d ) );
+  flow-children: right;
+  padding: 0px 15px;
+  border-bottom: 1px solid rgba(255, 252, 244, 0.06);
+}
+
+.LCTPanelTitle {
+  font-size: 18px;
+  color: #ffffff;
+  font-weight: bold;
+  letter-spacing: 1px;
+  vertical-align: center;
+}
+
+.LCTCloseButton {
+  align: right center;
+  width: 32px;
+  height: 32px;
+  background-color: transparent;
+  border: 0px solid transparent;
+  border-radius: 4px;
+  color: #a39c8e;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.LCTCloseButton:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+/* 主体与滚动列表 */
+.LCTSettingsBody {
+  width: 100%;
+  flow-children: down;
+}
+
+.LCTSettingsList {
+  width: 100%;
+  height: fill-parent-flow(1.0);
+  flow-children: down;
+  overflow: squish scroll;
+  padding: 12px 16px;
+}
+
+/* 设置行:纵向(标签在上,控件在下) */
+.LCTSettingsRow {
+  width: 100%;
+  flow-children: down;
+  padding: 5px 8px;
+  margin-bottom: 2px;
+  border-radius: 6px;
+}
+
+.LCTSettingsRow:hover {
+  background-color: gradient( linear, -8% 0%, 100% 0%, from( rgba(102, 204, 153, 0.05) ), to( rgba(102, 204, 153, 0.00) ) );
+}
+
+.LCTRowLabel {
+  color: #cde5db;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+/* 输入框:文字颜色显式设置(否则可能不可见) */
+.LCTInput {
+  width: 100%;
+  height: 28px;
+  background-color: gradient( linear, 0% 0%, 0% 100%, from( #1c1f24 ), to( #14171b ) );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: #e8e2d6;
+  font-size: 14px;
+  padding: 0px 8px;
+}
+
+.LCTInput:hover {
+  border: 1px solid rgba(255, 210, 127, 0.35);
+}
+
+/* 按钮(共用) */
+.LCTBtn, .LCTToggle {
+  padding: 2px 12px;
+  background-color: #20242a;
+  border: 0px solid transparent;
+  border-radius: 4px;
+  min-width: 68px;
+  height: 28px;
+  color: #c9c2b4;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  transition-property: background-color, brightness;
+  transition-duration: 0.18s;
+  transition-timing-function: ease-in-out;
+}
+
+.LCTBtn:hover, .LCTToggle:hover {
+  brightness: 1.08;
+  background-color: #2a2f36;
+  color: #ffffff;
+}
+
+.LCTBtn:active, .LCTToggle:active {
+  brightness: 0.85;
+}
+
+.LCTBtnSave {
+  background-color: #2f5d3a;
+  color: #ffffff;
+}
+
+.LCTBtnSave:hover {
+  background-color: #3a7048;
+  color: #ffffff;
+}
+
+.LCTBtnTest {
+  background-color: #2a4a6b;
+  color: #ffffff;
+}
+
+.LCTBtnTest:hover {
+  background-color: #355d85;
+  color: #ffffff;
+}
+
+/* 底部操作栏 */
+.LCTSettingsFooter {
+  width: 100%;
+  height: 56px;
+  flow-children: right;
+  padding: 0px 15px;
+  border-top: 1px solid rgba(255, 252, 244, 0.06);
+  background-color: gradient( linear, 0% 0%, 0% 100%, from( #13181d ), to( #0d1115 ) );
+}
+
+.LCTStatusLabel {
+  vertical-align: center;
+  color: #9fb4d0;
+  font-size: 12px;
+  margin-left: 12px;
+  width: fill-parent-flow(1.0);
+  text-overflow: shrink;
+  white-space: normal;
+}
+
+.LCTKeyHint {
+  vertical-align: center;
+  color: #6b7684;
+  font-size: 11px;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ---- 选择控件(点击切换/展开菜单) ---- */
+.LCTSelect {
+  padding: 2px 12px;
+  background-color: #20242a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  min-width: 200px;
+  height: 28px;
+  color: #e8e2d6;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  transition-property: background-color, brightness;
+  transition-duration: 0.18s;
+  transition-timing-function: ease-in-out;
+}
+
+.LCTSelect:hover {
+  brightness: 1.08;
+  background-color: #2a2f36;
+  border: 1px solid rgba(255, 210, 127, 0.4);
+}
+
+.LCTSelect:active {
+  brightness: 0.85;
+}
+
+/* 下拉菜单(默认隐藏;在行内流式展开,下方内容被推开属正常) */
+.LCTSelectMenu {
+  visibility: collapse;
+  flow-children: down;
+  width: 100%;
+  margin-top: 4px;
+  background-color: #161a1f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.LCTSelectMenu.LCTVisible {
+  visibility: visible;
+}
+
+.LCTMenuOption {
+  width: 100%;
+  height: 26px;
+  padding: 0px 8px;
+  background-color: transparent;
+  border: 0px solid transparent;
+  border-radius: 3px;
+  color: #c9c2b4;
+  font-size: 13px;
+  text-align: left;
+  transition-property: background-color, brightness;
+  transition-duration: 0.12s;
+}
+
+.LCTMenuOption:hover {
+  background-color: rgba(255, 210, 127, 0.14);
+  color: #ffffff;
+}
+
+/* 自定义语言输入框(选"自定义"时显示) */
+.LCTCustomInput {
+  visibility: collapse;
+  margin-top: 4px;
+}
+
+.LCTCustomInput.LCTVisible {
+  visibility: visible;
+}
+
+/* ---- 译文标签(追加在原文下方,金色醒目) ---- */
+.LCTTranslation {
+  color: #ffd27f;
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 0.2px;
+  margin-top: 3px;
+  margin-left: 58px;
+  max-width: 290px;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: normal;
+}
+
+/* 翻译失败红字 */
+.LCTTranslationError {
+  color: #ff7b72;
+  font-size: 13px;
+  margin-left: 58px;
+  margin-top: 3px;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
+}

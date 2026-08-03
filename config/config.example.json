@@ -1,0 +1,19 @@
+{
+  "port": 8791,
+  "provider": "bing",
+  "bing": {},
+  "microsoft": {
+    "apiKey": "",
+    "region": "",
+    "endpoint": "https://api.cognitive.microsofttranslator.com"
+  },
+  "defaults": {
+    "sourceLanguage": "auto",
+    "targetLanguage": "zh-Hans"
+  },
+  "timeoutMs": 15000,
+  "maxQueue": 200,
+  "watchGame": true,
+  "watchGameExe": "deadlock.exe",
+  "logFile": ""
+}

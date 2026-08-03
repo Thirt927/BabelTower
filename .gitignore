@@ -1,0 +1,26 @@
+# 本地敏感配置(含 API Key),绝不入库
+config/config.json
+config.json
+
+# 运行时日志
+logs/
+
+# 内部开发笔记(不入库)
+LEARNINGS.md
+
+# 构建产物
+dist/
+*.vpk
+
+# 工具(体积大,各自单独下载)
+tools/*.exe
+portable-node/
+
+# Node / 系统
+node_modules/
+*.log
+Thumbs.db
+.DS_Store
+
+# 临时 CSDK addon 工作目录(在 CSDK 里,不在本项目,此处为防御性忽略)
+content_addon_staging/
