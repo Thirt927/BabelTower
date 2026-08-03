@@ -24,3 +24,7 @@ Thumbs.db
 
 # 临时 CSDK addon 工作目录(在 CSDK 里,不在本项目,此处为防御性忽略)
 content_addon_staging/
+config/gamebanana_cookies.txt
+config/gb_browser_profile/
+config/gamebanana_session.json
+scripts/gb_*.py
