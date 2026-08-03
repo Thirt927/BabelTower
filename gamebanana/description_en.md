@@ -1,0 +1,50 @@
+# Babel Tower - Deadlock In-game Chat Translator
+
+Real-time chat translation for Deadlock. Foreign messages are translated instantly with the result shown right below the original; you can also translate your own messages before sending (translation-only or bilingual).
+
+**No registration needed** - the default provider is Bing's public free translation API (works in China without a proxy). Microsoft Azure is available as an optional provider.
+
+## Features
+
+- Real-time translation of incoming chat, golden text shown below each message
+- Outgoing translation: Off / Translation-only / Bilingual (original | translation)
+- Settings panel: press Enter, type `/tr`, or click the "译" button next to the chat input
+- All settings are click-to-select (provider, target language, display mode, etc.)
+- Local bridge auto-starts with Windows and auto-exits when the game closes
+- Smart skips: own messages, commands (/), pure numbers/symbols, and text already in the target language
+- Translation cache survives chat scroll recycling
+
+## Installation (3 steps)
+
+1. Extract the zip anywhere (avoid spaces in the path, e.g. `D:\BabelTower`)
+2. Install the mod: drag `pak01_dir.vpk` into **Deadlock Mod Manager**, or copy it to `game\citadel\addons\` (rename to a free slot like `pak25_dir.vpk` if a file with that name already exists)
+3. Enable the local bridge (choose one):
+   - **Recommended (permanent):** run once
+     `powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install`
+     (bridge auto-starts at login, auto-exits when the game closes)
+   - **Temporary:** double-click `StartDeadlock.bat` before playing
+
+4. In game: open chat (Enter), type `/tr`, click **测试 (Test)** - it should show "测试成功: 你好", click **保存 (Save)**, close with ESC. Done!
+
+> No Node.js installation needed - a portable runtime is bundled.
+
+## Settings
+
+| Setting | Options |
+| --- | --- |
+| Provider | bing (free, default) / microsoft (Azure key) |
+| Target language | 简体中文 / 繁體中文 / English / 日本語 / 한국어 / Français / Deutsch / Español / custom |
+| Display mode | Bilingual (original + translation) / translation only |
+| Outgoing translation | Off / translation only / bilingual (original \| translation) |
+| Outgoing target language | Same language list |
+
+## Requirements
+
+- Windows 10/11, Deadlock (Steam)
+- Internet access to bing.com for the default provider
+
+## Notes
+
+- LGPL-3.0 licensed. Source code: https://github.com/c1375rick/BabelTower
+- The public Bing interface may occasionally be rate-limited; it retries automatically. Switch to the Microsoft provider if it's unreliable in your region.
+- This mod is not affiliated with Valve.
