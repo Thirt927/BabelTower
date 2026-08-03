@@ -32,6 +32,19 @@ $Dist = Join-Path $Root "dist"
 function Fail($msg) { Write-Host "[release] 错误: $msg" -ForegroundColor Red; exit 1 }
 function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 
+# ---------- 代理引导(本机常见本地代理端口在监听时自动启用) ----------
+if (-not $env:HTTPS_PROXY) {
+  foreach ($port in @(10809, 7890, 1080)) {
+    $t = Test-NetConnection -ComputerName 127.0.0.1 -Port $port -WarningAction SilentlyContinue -InformationLevel Quiet
+    if ($t) {
+      $env:HTTPS_PROXY = "http://127.0.0.1:$port"
+      $env:HTTP_PROXY = $env:HTTPS_PROXY
+      Write-Host "(代理引导) 使用 http://127.0.0.1:$port"
+      break
+    }
+  }
+}
+
 # ---------- 版本 ----------
 if (-not $Version) {
   $Version = (Get-Content (Join-Path $Root "VERSION") -Raw -Encoding UTF8).Trim()
@@ -67,7 +80,10 @@ if (-not (Test-Path $Vpk)) { Fail "缺少 VPK: $Vpk" }
 
 # ---------- 生成更新日志 ----------
 Step "生成更新日志..."
-$prevTag = (git describe --tags --abbrev=0 2>$null | Select-Object -First 1)
+cd $Root
+git fetch --tags 2>&1 | Out-Null
+$prevTag = ""
+try { $prevTag = (git describe --tags --abbrev=0 2>&1 | Select-Object -First 1).Trim() } catch {}
 if ($prevTag) {
   $log = git log "$prevTag..HEAD" --oneline --no-decorate 2>$null
   $logSection = "自 $prevTag 以来的提交:`n`n$log"
