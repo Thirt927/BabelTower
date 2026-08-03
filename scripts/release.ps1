@@ -116,12 +116,16 @@ $notesFile = Join-Path $env:TEMP "babeltower_notes_$Version.md"
 [System.IO.File]::WriteAllText($notesFile, $notes, (New-Object System.Text.UTF8Encoding($true)))
 if ($WhatIf) { Write-Host "  (WhatIf) 更新日志将写入: $notesFile" }
 
+# ---------- 版本号自增(先算出,供 WhatIf 展示) ----------
+$parts = $Version -split '\.'
+$next = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+
 # ---------- 发布 ----------
 if ($WhatIf) {
   Write-Host ""
   Write-Host "===== WhatIf 演练结果 =====" -ForegroundColor Yellow
   Write-Host "将执行: gh release create $Tag $Zip $Vpk --title 'Babel Tower v$Version' $(if($Draft){'--draft'})"
-  Write-Host "之后将: VERSION $Version -> $([int]([version]$Version).Build + 1) 补丁号自增并提交推送"
+  Write-Host "之后将: VERSION $Version -> $next 补丁号自增并提交推送"
   exit 0
 }
 
@@ -132,8 +136,6 @@ gh @args 2>&1 | Select-Object -Last 2
 if ($LASTEXITCODE -ne 0) { Fail "gh release create 失败" }
 
 # ---------- 版本号自增 ----------
-$parts = $Version -split '\.'
-$next = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
 Step "版本号自增: $Version -> $next"
 [System.IO.File]::WriteAllText((Join-Path $Root "VERSION"), $next + "`n", (New-Object System.Text.UTF8Encoding($false)))
 git add VERSION
