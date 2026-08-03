@@ -21,6 +21,7 @@ Babel Tower - Deadlock 聊天翻译 Mod 安装使用说明
 
 3. 启动本地桥(二选一):
    方法 A(推荐,一劳永逸):右键"以管理员身份运行"下面的命令(或打开 PowerShell 执行):
+     cd /d 你的解压路径(如 cd /d D:\BabelTower)
      powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
      之后开机自动启动桥,游戏退出桥自动关闭,什么都不用管。
    方法 B(临时):双击 StartDeadlock.bat(每次玩之前都要双击一次)
