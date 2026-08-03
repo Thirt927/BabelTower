@@ -46,8 +46,13 @@ BabelTower/
 4. 一键自启(推荐,之后 Steam 直接启动游戏即可,游戏退出桥自动关闭):
 
 ```powershell
+# 先进入项目目录(换成你的实际路径)
+cd D:\BabelTower
 powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 ```
+
+> 若提示找不到脚本,说明当前目录不对:先 `cd` 到项目目录,或用完整路径
+> `powershell -ExecutionPolicy Bypass -File "<你的路径>\scripts\autostart.ps1" -Action Install`
 
 5. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动
 
