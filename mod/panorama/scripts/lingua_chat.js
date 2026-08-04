@@ -28,6 +28,14 @@
   const CHANNEL_NAME_CLASS = "ChannelName";
   const LOCAL_CLIENT_ID = "SenderLocalClient";
 
+  // ---- HUD 顶栏聊天结构(citadel_hud_top_bar_chat.vxml,与 QoL 类 HUD mod 兼容:不改布局只扫描)----
+  const HUD_CHAT_CLASS = "CitadelHudTopBarChat"; // 面板类型(Team1Chat/Team2Chat 两个实例);type 不是 class,遍历不到,仅作兕底
+  const HUD_CHAT_IDS = ["Team1Chat", "Team2Chat"]; // 布局写死的固定 id(主查找路径)
+  const HUD_MESSAGES_ID = "Messages"; // 顶栏气泡容器
+  const HUD_BUBBLE_CLASS = "ChatBubble"; // 气泡(区分 HUD 行与左下聊天行)
+  const HUD_TEXT_ID = "MessageText"; // 气泡内文本 Label
+  const TRANS_LABEL_HUD_CLASS = "LCTTranslationHud";
+
   // ---- LinguaChat 自身 ID / class ----
   const SETTINGS_BUTTON_ID = "LCTSettingsButton";
   const SETTINGS_PANEL_ID = "LCTSettingsPanel";
@@ -68,6 +76,9 @@
     input: null,
     targetLabel: null,
     scannedCount: 0,
+    hudMessages: [], // HUD 顶栏聊天 Messages 容器列表(Team1Chat/Team2Chat)
+    hudScanned: [], // 每个 HUD 容器已扫描的行数
+    hudLogged: false,
     bootLogged: false,
     seen: new Set(), // 消息签名去重
     cache: new Map(), // 签名 -> { translation }
@@ -274,6 +285,15 @@
   // ================= 消息读取与过滤 =================
 
   function readMessageRow(row) {
+    // HUD 顶栏行:无 MessageSource,文本在 MessageText(气泡内),sender 未知
+    const isHudRow = hasClass(row, "ChatMessage") && !!findClass(row, HUD_BUBBLE_CLASS);
+    if (isHudRow) {
+      const textLabel = findChild(row, HUD_TEXT_ID);
+      const text = safeText(textLabel) || collectText(row);
+      if (!text) return null;
+      const isOwn = hasClass(row, "IsSelf") || !!findChild(row, LOCAL_CLIENT_ID);
+      return { sender: UNKNOWN_NAME, channel: "hud", text: text, isOwn: isOwn, hud: true };
+    }
     const source = findChild(row, MESSAGE_SOURCE_ID);
     const contents = findChild(row, MESSAGE_CONTENTS_ID);
     const sender =
@@ -318,22 +338,32 @@
 
   // ================= 译文注入 =================
 
+  function isHudRow(row) {
+    return hasClass(row, "ChatMessage") && !!findClass(row, HUD_BUBBLE_CLASS);
+  }
+
   function transLabelId(sig) {
     return "LCTTrans" + hashString(sig);
   }
 
   function getTransLabel(row, sig) {
+    if (isHudRow(row)) {
+      const bubble = findClass(row, HUD_BUBBLE_CLASS);
+      if (bubble) return findChild(bubble, transLabelId(sig));
+    }
     return findChild(row, transLabelId(sig));
   }
 
   function injectTranslation(row, sig, text) {
     if (!isValid(row)) return;
-    const body = findClass(row, MESSAGE_BODY_CLASS) || row;
+    const hud = isHudRow(row);
+    // HUD 行:译文 label 挂到气泡内;普通行:挂到 MessageBody 下
+    const body = hud ? (findClass(row, HUD_BUBBLE_CLASS) || row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
     let label = getTransLabel(row, sig);
     if (!isValid(label)) {
       try {
         label = $.CreatePanel("Label", body, transLabelId(sig));
-        label.AddClass(TRANS_LABEL_CLASS);
+        label.AddClass(hud ? TRANS_LABEL_HUD_CLASS : TRANS_LABEL_CLASS);
       } catch (e) {
         return;
       }
@@ -346,7 +376,8 @@
       label.text = String(text);
     } catch (e) {}
     // 只显示译文模式:隐藏原文(快捷对话/Ping 行保留气泡,避免消息"消失")
-    if (State.cfg.displayMode === "translation_only") {
+    // HUD 顶栏行不折叠:气泡本身短暂显示,折叠会连译文一起隐藏
+    if (!hud && State.cfg.displayMode === "translation_only") {
       const contents = findChild(row, MESSAGE_CONTENTS_ID);
       if (contents) {
         let isPing = false;
@@ -364,12 +395,13 @@
 
   function injectError(row, sig, message) {
     if (!isValid(row)) return;
-    const body = findClass(row, MESSAGE_BODY_CLASS) || row;
+    const hud = isHudRow(row);
+    const body = hud ? (findClass(row, HUD_BUBBLE_CLASS) || row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
     let label = getTransLabel(row, sig);
     if (!isValid(label)) {
       try {
         label = $.CreatePanel("Label", body, transLabelId(sig));
-        label.AddClass(TRANS_LABEL_CLASS);
+        label.AddClass(hud ? TRANS_LABEL_HUD_CLASS : TRANS_LABEL_CLASS);
       } catch (e) {
         return;
       }
@@ -708,10 +740,44 @@
       if (isValid(job.row) && job.row.__lctSig === job.sig) {
         injectTranslation(job.row, job.sig, payload.translation);
         log("translated [" + (job.record.channel || "chat") + "] " + job.record.sender + ": " + payload.translation.slice(0, 60));
+      } else {
+        // 诊断:翻译成功但行已失效(游戏可能在 2 秒内清理了顶栏消息行)
+        log("translated skipped: row=" + (isValid(job.row) ? "valid" : "GONE") + " sig=" + ((job.row && job.row.__lctSig === job.sig) ? "match" : "MISMATCH") + " text=" + String(job.record.text || "").slice(0, 30));
+        // HUD 测试行被游戏清理后,重建一条译文显示行(验证通路;真实消息行生命周期更长不受影响)
+        tryRecreateHudTranslation(job, payload.translation);
       }
       finishJob();
     } else {
       failJob(job, payload.error || "unknown_error");
+    }
+  }
+
+  // HUD 顶栏行被游戏快速清理(外来构造行无内部状态)时,在顶栏 chat 根面板下挂独立译文浮层
+  // (不挂在 #Messages 下、不带 ChatMessage 类,避开游戏消息清理器),显示 5 秒后自删。
+  function tryRecreateHudTranslation(job, translation) {
+    try {
+      if (job.record.channel !== "hud") return;
+      resolveHudMessages();
+      if (State.hudMessages.length === 0) return;
+      const container = State.hudMessages[0]; // #Messages
+      if (!isValid(container)) return;
+      // 浮层挂在 Messages 的父级(CitadelHudTopBarChat 根)下,而非 Messages 内
+      const parent = container.GetParent ? container.GetParent() : null;
+      if (!isValid(parent)) return;
+      const overlay = $.CreatePanel("Panel", parent, "LCTOverlay" + nowMs());
+      overlay.AddClass("LCTTransOverlay");
+      const label = $.CreatePanel("Label", overlay, "");
+      label.AddClass("LCTTransOverlayText");
+      label.text = String(translation || "");
+      log("HUD test: recreated translation overlay (original row was cleaned up)");
+      // 5 秒后自删(译文浮层仅用于测试验证通路,不长期占用)
+      $.Schedule(5.0, function () {
+        try {
+          if (isValid(overlay)) overlay.DeleteAsync(0);
+        } catch (e) {}
+      });
+    } catch (e) {
+      log("HUD test: recreate failed: " + (e && e.message ? e.message : String(e)));
     }
   }
 
@@ -771,18 +837,27 @@
         contents.style.visibility = "visible";
       }
     } catch (e) {}
-    const body = findClass(row, MESSAGE_BODY_CLASS) || row;
-    const count = childCount(body);
-    for (let i = count - 1; i >= 0; i -= 1) {
-      const child = childAt(body, i);
-      if (!isValid(child)) continue;
-      if (!hasClass(child, TRANS_LABEL_CLASS)) continue;
-      try {
-        child.DeleteAsync(0);
-      } catch (e) {
+    // 收集译文标签所在容器(普通行:MessageBody;HUD 行:ChatBubble)
+    const containers = [];
+    const body = findClass(row, MESSAGE_BODY_CLASS);
+    if (isValid(body)) containers.push(body);
+    const bubble = findClass(row, HUD_BUBBLE_CLASS);
+    if (isValid(bubble)) containers.push(bubble);
+    containers.push(row);
+    for (const container of containers) {
+      if (!isValid(container)) continue;
+      const count = childCount(container);
+      for (let i = count - 1; i >= 0; i -= 1) {
+        const child = childAt(container, i);
+        if (!isValid(child)) continue;
+        if (!hasClass(child, TRANS_LABEL_CLASS) && !hasClass(child, TRANS_LABEL_HUD_CLASS)) continue;
         try {
-          child.RemoveAndDeleteChildren();
-        } catch (e2) {}
+          child.DeleteAsync(0);
+        } catch (e) {
+          try {
+            child.RemoveAndDeleteChildren();
+          } catch (e2) {}
+        }
       }
     }
   }
@@ -809,7 +884,13 @@
 
     if (State.seen.has(sig)) {
       if (State.cache.has(sig)) restoreFromCache(row, sig);
-      return false;
+      // 测试行:相同文本也强制重新翻译(seen 去重会吞掉重复测试)
+      if (row.__lctTestForce) {
+        State.seen.delete(sig);
+        row.__lctTestForce = false;
+      } else {
+        return false;
+      }
     }
     State.seen.add(sig);
     while (State.seen.size > SEEN_LIMIT) {
@@ -856,10 +937,123 @@
     return touched;
   }
 
+  // ================= HUD 顶栏聊天扫描(citadel_hud_top_bar_chat) =================
+
+  // 解析 HUD 顶栏聊天的 Messages 容器(Team1Chat/Team2Chat 两个实例)
+  // 注意:CitadelHudTopBarChat 是面板 type 不是 class,FindChildrenWithClassTraverse 找不到,
+  // 必须用布局里写死的 id(Team1Chat/Team2Chat)查找,class 遍历仅作兜底。
+  function resolveHudMessages() {
+    const root = getRoot();
+    if (!root) return;
+    const found = [];
+    const seen = new Set(); // 用 Set 去重(对象 key 会转 [object Object] 导致误判)
+    const tryAdd = (chat) => {
+      if (!isValid(chat) || seen.has(chat)) return;
+      const messages = findChild(chat, HUD_MESSAGES_ID);
+      if (isValid(messages)) { seen.add(chat); found.push(messages); }
+    };
+    // 主路径:固定 id(游戏布局写死)
+    for (const id of HUD_CHAT_IDS) {
+      tryAdd(findChild(root, id));
+    }
+    // 兜底:class 遍历(万一游戏改了 id)
+    const chats = root.FindChildrenWithClassTraverse
+      ? (() => { try { return root.FindChildrenWithClassTraverse(HUD_CHAT_CLASS) || []; } catch (e) { return []; } })()
+      : [];
+    for (const chat of chats) tryAdd(chat);
+    // 面板树变化时重建列表(游戏可能动态增删顶栏聊天实例)
+    let changed = found.length !== State.hudMessages.length;
+    if (!changed) {
+      for (let i = 0; i < found.length; i += 1) {
+        if (found[i] !== State.hudMessages[i]) { changed = true; break; }
+      }
+    }
+    if (changed) {
+      State.hudMessages = found;
+      State.hudScanned = found.map(() => 0);
+      // 每次面板树变化都打印(菜单 0 个 -> 进局 2 个,日志能明确看到发现时机)
+      log("watching HUD top bar chat (" + found.length + ")");
+    }
+    // 首轮 resolve 若 0 个:打印诊断(根面板 id/class),仅一次避免刷屏
+    if (found.length === 0 && !State.hudLogged) {
+      State.hudLogged = true;
+      let cls = "?";
+      try { if (root.GetPanelClassList) cls = root.GetPanelClassList().join(","); } catch (e) {}
+      log("HUD chat not found yet: root=" + (root.id || "?") + " classes=[" + cls + "] (retrying each poll)");
+    }
+  }
+
+  function scanHudTopBarOnce() {
+    resolveHudMessages();
+    let touched = false;
+    for (let i = 0; i < State.hudMessages.length; i += 1) {
+      const messages = State.hudMessages[i];
+      if (!isValid(messages)) continue;
+      const count = childCount(messages);
+      if (count < State.hudScanned[i]) State.hudScanned[i] = 0;
+      const start = State.hudScanned[i];
+      touched = processRange(messages, start, count) || touched;
+      // 低延迟:每次额外扫末尾几条
+      touched = processRange(messages, Math.max(0, count - LOW_LATENCY_TAIL_SCAN_LIMIT), count) || touched;
+      State.hudScanned[i] = count;
+    }
+    return touched;
+  }
+
   function scanChatMessages() {
-    const touched = scanChatMessagesOnce();
+    // 注意:两个扫描都必须执行,不能用 || 短路——
+    // 左下角聊天有活动时 scanChatMessagesOnce() 返回 true 会跳过 HUD 扫描
+    const touchedChat = scanChatMessagesOnce();
+    const touchedHud = scanHudTopBarOnce();
+    const touched = touchedChat || touchedHud;
     const hasWork = touched || State.queue.length > 0 || State.pending;
     $.Schedule(hasWork ? FAST_POLL_SECONDS : SLOW_POLL_SECONDS, scanChatMessages);
+  }
+
+  // !lcttest 测试命令:向 HUD 顶栏聊天注入一条构造消息(与真实行同构),
+  // 走正常扫描+翻译流程。无队友/无 bot 时验证 HUD 通路的唯一手段。
+  function injectHudTestMessage(text) {
+    try {
+      resolveHudMessages();
+      if (State.hudMessages.length === 0) {
+        log("HUD test: no HUD chat container found yet (in-match?)");
+        return;
+      }
+      const container = State.hudMessages[0]; // Team1Chat 的 Messages
+      const row = $.CreatePanel("Panel", container, "LCTTestRow" + nowMs());
+      row.AddClass("ChatMessage");
+      const contents = $.CreatePanel("Panel", row, "MessageContents");
+      const bubble = $.CreatePanel("Panel", contents, "");
+      bubble.AddClass("ChatBubble");
+      const tc = $.CreatePanel("Panel", bubble, "");
+      tc.AddClass("TextContainer");
+      const textPanel = $.CreatePanel("Label", tc, "MessageText");
+      textPanel.text = String(text);
+      row.__lctTestForce = true; // 每次测试都强制重新翻译(不被 seen 去重吞掉)
+      log("HUD test: injected '" + String(text).slice(0, 40) + "' into HUD chat (" + State.hudMessages.length + " containers)");
+      // 关键:行可能被游戏 1 秒内清理,立即同步扫描一次抢在清理前发出翻译请求
+      try { scanHudTopBarOnce(); } catch (e) { log("HUD test: immediate scan failed: " + (e && e.message ? e.message : String(e))); }
+      // 诊断:1s/3s 后检查行是否存活、可见性、是否已注入译文(定位行被删/隐藏/翻译时序问题)
+      const checkRow = row;
+      $.Schedule(1.0, function () {
+        if (!isValid(checkRow)) { log("HUD test: row GONE at 1s"); return; }
+        let vis = "?";
+        try { vis = String(checkRow.style.visibility); } catch (e) {}
+        let expired = false;
+        try { expired = checkRow.BHasClass("Expired"); } catch (e) {}
+        const hasLabel = findClass(checkRow, TRANS_LABEL_HUD_CLASS);
+        log("HUD test: row alive@1s vis=" + vis + " expired=" + expired + " label=" + (hasLabel ? "yes" : "no"));
+      });
+      $.Schedule(3.0, function () {
+        if (!isValid(checkRow)) { log("HUD test: row GONE at 3s"); return; }
+        let vis = "?";
+        try { vis = String(checkRow.style.visibility); } catch (e) {}
+        const hasLabel = findClass(checkRow, TRANS_LABEL_HUD_CLASS);
+        log("HUD test: row alive@3s vis=" + vis + " label=" + (hasLabel ? "yes" : "no"));
+      });
+    } catch (e) {
+      log("HUD test failed: " + (e && e.message ? e.message : String(e)));
+    }
   }
 
   // ================= 发送接管(命令 / 发送前翻译) =================
@@ -903,6 +1097,15 @@
     if (trimmed === "/tr" || trimmed.indexOf("/tr ") === 0) {
       clearInput();
       openSettingsPanel();
+      return;
+    }
+
+    // !lcttest 测试命令:向 HUD 顶栏聊天注入一条英文消息(不真实发送)
+    // 用途:无队友/无 bot 时验证 HUD 扫描+翻译通路;进训练场即可测
+    if (trimmed === "!lcttest" || trimmed.indexOf("!lcttest ") === 0) {
+      const testText = trimmed.length > 9 ? trimmed.slice(9).trim() : "hello can you push mid";
+      injectHudTestMessage(testText);
+      clearInput();
       return;
     }
 

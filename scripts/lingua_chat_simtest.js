@@ -68,6 +68,13 @@ function freshEnv(cfg) {
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
   const messagesPanel = chatPanel.addChild(new MockPanel("ChatMessages"));
   const bridgePanel = contextPanel.addChild(new MockPanel("LCTBridgePanel"));
+  // HUD 顶栏聊天(与真实 citadel_hud_top_bar_chat.vxml 同构)
+  // 关键:CitadelHudTopBarChat 是面板 TYPE 不是 class → FindChildrenWithClassTraverse 找不到,
+  // 只能靠固定 id(Team1Chat/Team2Chat)查找。这里不 setClass(type),仅设 id。
+  const hudChat = contextPanel.addChild(new MockPanel("Team1Chat"));
+  const hudMessages = hudChat.addChild(new MockPanel("Messages"));
+  const hudChat2 = contextPanel.addChild(new MockPanel("Team2Chat"));
+  const hudMessages2 = hudChat2.addChild(new MockPanel("Messages"));
 
   bridgePanel.SetURL = function (url) {
     const q = new URL(url, "http://x").searchParams;
@@ -110,7 +117,7 @@ function freshEnv(cfg) {
   require(SCRIPT);
 
   return {
-    contextPanel, messagesPanel,
+    contextPanel, messagesPanel, hudMessages, hudMessages2,
     addRow(kind, sender, text, opts) {
       const row = new MockPanel(null).setClass("ChatMessage", "Expired");
       if (opts && opts.own) row.setClass("IsSelf");
@@ -128,6 +135,20 @@ function freshEnv(cfg) {
         contents.addChild(new MockPanel(null)).text = text;
       }
       messagesPanel.addChild(row);
+      return row;
+    },
+    // HUD 顶栏气泡行(真实结构:ChatMessage -> MessageContents -> ChatBubble -> TextContainer -> MessageText)
+    addHudRow(text, opts) {
+      const row = new MockPanel(null).setClass("ChatMessage");
+      if (opts && opts.own) row.setClass("IsSelf");
+      const contents = row.addChild(new MockPanel("MessageContents"));
+      const bubble = contents.addChild(new MockPanel(null).setClass("ChatBubble"));
+      const tc = bubble.addChild(new MockPanel(null).setClass("TextContainer"));
+      tc.addChild(new MockPanel(null).setClass("bubble_bg"));
+      tc.addChild(new MockPanel("MessageText")).text = text;
+      bubble.addChild(new MockPanel("HeroImage"));
+      contents.addChild(new MockPanel(null).setClass("ResponsesContainer"));
+      hudMessages.addChild(row);
       return row;
     },
     recycleRow(row, kind, sender, text, opts) {
@@ -307,8 +328,77 @@ async function test8_consecutiveIncoming() {
   assert("row2 label is translation of msg2", l2 && l2.text.indexOf("gg") === -1 && l2.text.length > 0, l2 && l2.text);
 }
 
+// HUD 顶栏聊天翻译(方案 A:不改布局,扫描 CitadelHudTopBarChat 的 Messages 容器)
+async function test9_hudTopBarTranslation() {
+  console.log("\n[9] HUD top bar chat: english bubble -> translation injected inside bubble");
+  const env = freshEnv(CFG.translationOnly);
+  const row = env.addHudRow("hello can you push mid");
+  const ok = await waitFor(() => row.FindChildrenWithClassTraverse("LCTTranslationHud").length > 0, 10000);
+  await sleep(300);
+  const labels = row.FindChildrenWithClassTraverse("LCTTranslationHud");
+  const bubble = row.FindChildrenWithClassTraverse("ChatBubble")[0];
+  assert("translation label injected in HUD bubble", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  assert("label text is Chinese (not raw English)", labels[0] && labels[0].text.indexOf("hello") === -1, labels[0] && labels[0].text);
+  assert("label is child of ChatBubble", labels[0] && labels[0].GetParent() === bubble);
+  assert("HUD bubble NOT collapsed (translation_only keeps bubble)", row.FindChildTraverse("MessageContents").style.visibility === "visible", row.FindChildTraverse("MessageContents").style.visibility);
+}
+
+async function test10_hudOwnMessageSkipped() {
+  console.log("\n[10] HUD top bar chat: own message (IsSelf) -> not translated");
+  const env = freshEnv(CFG.translationOnly);
+  const row = env.addHudRow("hello team", { own: true });
+  await sleep(1500);
+  const labels = row.FindChildrenWithClassTraverse("LCTTranslationHud");
+  assert("no translation label for own HUD message", labels.length === 0, labels.length + " labels");
+}
+
+// 回归:CitadelHudTopBarChat 是 type 不是 class,必须靠 id(Team1Chat/Team2Chat)发现两个实例
+async function test11_hudBothTeamsFoundById() {
+  console.log("\n[11] HUD both Team1Chat + Team2Chat discovered by id (not class)");
+  const env = freshEnv(CFG.translationOnly);
+  // Team1Chat 已由 addHudRow 使用;现在往 Team2Chat 也加一条英文消息
+  const row2 = new MockPanel(null).setClass("ChatMessage");
+  const contents2 = row2.addChild(new MockPanel("MessageContents"));
+  const bubble2 = contents2.addChild(new MockPanel(null).setClass("ChatBubble"));
+  const tc2 = bubble2.addChild(new MockPanel(null).setClass("TextContainer"));
+  tc2.addChild(new MockPanel("MessageText")).text = "enemy team push now";
+  env.hudMessages2.addChild(row2);
+  const ok = await waitFor(() => row2.FindChildrenWithClassTraverse("LCTTranslationHud").length > 0, 10000);
+  const labels = row2.FindChildrenWithClassTraverse("LCTTranslationHud");
+  assert("Team2Chat row translated (found via Team2Chat id)", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  assert("translation is Chinese", labels[0] && labels[0].text.indexOf("enemy") === -1, labels[0] && labels[0].text);
+}
+
+// !lcttest 测试命令:输入框提交 -> 注入 HUD 行 -> 走正常翻译流程
+async function test12_lcttestCommand() {
+  console.log("\n[12] !lcttest command: injects HUD test row -> translation appears");
+  const env = freshEnv(CFG.translationOnly);
+  const input = env.contextPanel.FindChildTraverse("ChatInput") ||
+    env.contextPanel.addChild(new MockPanel("ChatInput"));
+  input.text = "!lcttest hello world test";
+  globalThis.LCTOnChatSubmit();
+  const container = env.hudMessages; // Team1Chat Messages
+  const ok = await waitFor(() => {
+    for (let i = 0; i < container.GetChildCount(); i += 1) {
+      const r = container.GetChild(i);
+      if (r && r.FindChildrenWithClassTraverse("LCTTranslationHud").length > 0) return true;
+    }
+    return false;
+  }, 10000);
+  let label = null, row = null;
+  for (let i = 0; i < container.GetChildCount(); i += 1) {
+    const r = container.GetChild(i);
+    const ls = r && r.FindChildrenWithClassTraverse("LCTTranslationHud");
+    if (ls && ls.length > 0) { row = r; label = ls[0]; break; }
+  }
+  assert("HUD test row translated", ok && !!label && label.text.length > 0, label && label.text);
+  assert("translation is Chinese (not raw english)", label && label.text.indexOf("hello") === -1, label && label.text);
+  assert("test row is ChatMessage with ChatBubble", row && row.BHasClass("ChatMessage") && !!row.FindChildrenWithClassTraverse("ChatBubble").length);
+  assert("row NOT collapsed (HUD rule)", row && row.FindChildTraverse("MessageContents").style.visibility === "visible", row && row.FindChildTraverse("MessageContents").style.visibility);
+}
+
 async function main() {
-  console.log("=== Babel Tower lingua_chat simulation tests v4 (bridge must run on 8791) ===");
+  console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
   await test2_recycleToChineseQuickChat();
   await test3_recycleToAnotherEnglish();
@@ -317,6 +407,10 @@ async function main() {
   await test6_ownMessageSkipped();
   await test7_consecutiveOutgoing();
   await test8_consecutiveIncoming();
+  await test9_hudTopBarTranslation();
+  await test10_hudOwnMessageSkipped();
+  await test11_hudBothTeamsFoundById();
+  await test12_lcttestCommand();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }

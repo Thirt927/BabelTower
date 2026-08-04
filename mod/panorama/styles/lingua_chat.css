@@ -307,3 +307,42 @@
   margin-top: 3px;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
 }
+
+/* ---- HUD 顶栏聊天气泡内译文(citadel_hud_top_bar_chat) ----
+   气泡窄(最大 250px)、短暂显示;译文直接放在气泡文本下方,
+   白字黑底保证在浅色气泡背景上可读,无需左侧缩进(气泡自居中)。 */
+.LCTTranslationHud {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 0.2px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+  max-width: 220px;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.95);
+  white-space: normal;
+}
+
+/* ---- HUD 测试译文浮层(!lcttest 专用;挂在顶栏 chat 根面板下,
+   不占游戏消息行,避开游戏清理器,5 秒自删) ---- */
+.LCTTransOverlay {
+  background-color: rgba(10, 12, 16, 0.92);
+  border: 1px solid rgba(255, 210, 127, 0.6);
+  border-radius: 4px;
+  margin: 4px;
+  padding: 6px 10px;
+  flow-children: down;
+  width: fit-children;
+  height: fit-children;
+  z-index: 100;
+}
+
+.LCTTransOverlayText {
+  color: #ffd27f;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 0.2px;
+  white-space: normal;
+  max-width: 300px;
+  text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.95);
+}
