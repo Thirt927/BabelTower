@@ -410,7 +410,17 @@
   }
 
   function enqueue(row, sig, record) {
-    State.queue.push({ row: row, sig: sig, record: record, attempts: 0 });
+    State.queue.push({ kind: "chat", row: row, sig: sig, record: record, attempts: 0 });
+    pumpQueue();
+  }
+
+  function enqueueOutgoing(text, done) {
+    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: text }, attempts: 0, done: done });
+    pumpQueue();
+  }
+
+  function enqueueBridge(op, data, done) {
+    State.queue.push({ kind: "bridge", op: op, data: data, row: null, sig: null, attempts: 0, done: done });
     pumpQueue();
   }
 
@@ -425,9 +435,17 @@
   function buildBridgeUrl(job) {
     const id = "r" + (++State.requestSeq).toString(36);
     job.id = id;
+    if (job.kind === "bridge") {
+      return (
+        "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
+        "/bridge?id=" + id +
+        "&op=" + job.op +
+        "&d=" + job.data
+      );
+    }
     const text = encodeURIComponent(job.record.text);
     const source = encodeURIComponent("auto");
-    const target = encodeURIComponent(targetLanguage());
+    const target = encodeURIComponent(job.kind === "outgoing" ? resolveOutgoingTarget() : targetLanguage());
     return (
       "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
       "/bridge?id=" + id +
@@ -462,21 +480,52 @@
   function dispatchJob(job) {
     const panel = ensurePanel();
     if (!panel) {
-      failJob(job, "bridge_panel_unavailable");
+      // 出站/桥任务不重试:面板不可用立即回传失败(出站则发原文),避免拖延用户发消息
+      if (job.kind === "outgoing") {
+        job.done(null, null);
+        finishJob();
+      } else if (job.kind === "bridge") {
+        job.done({ ok: false, error: "bridge_panel_unavailable" });
+        finishJob();
+      } else {
+        failJob(job, "bridge_panel_unavailable");
+      }
       return;
     }
     ensureBridgeEvents();
     const url = buildBridgeUrl(job);
     setPending(job.id, function (payload) {
-      if (payload.ok) handleResult(job, payload);
-      else failJob(job, payload.error || "unknown_error");
+      if (job.kind === "outgoing") {
+        // 出站翻译:不重试,结果直接回传(失败则发原文)
+        if (payload && payload.ok && payload.translation) {
+          job.done(payload.translation, payload.detectedLanguage || null);
+        } else {
+          job.done(null, null);
+        }
+        finishJob();
+      } else if (job.kind === "bridge") {
+        job.done(payload || { ok: false, error: "bad_bridge_payload" });
+        finishJob();
+      } else if (payload.ok) {
+        handleResult(job, payload);
+      } else {
+        failJob(job, payload.error || "unknown_error");
+      }
     }, State.cfg.timeoutMs || 15000);
     try {
       panel.SetURL(url);
     } catch (e) {
       State.pending = null;
       log("SetURL failed: " + (e && e.message ? e.message : String(e)));
-      failJob(job, "bridge_load_failed");
+      if (job.kind === "outgoing") {
+        job.done(null, null);
+        finishJob();
+      } else if (job.kind === "bridge") {
+        job.done({ ok: false, error: "bridge_load_failed" });
+        finishJob();
+      } else {
+        failJob(job, "bridge_load_failed");
+      }
     }
   }
 
@@ -869,11 +918,20 @@
           else if (outgoingMode === "bilingual") send = trimmed + " | " + String(translated).trim();
         }
         log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80));
+        // 覆盖前先捕获当前输入框内容:若用户已输入新消息,不能丢失
+        const cur = safeText(input);
         try {
           input.text = send;
         } catch (e) {}
         triggerStockSubmit(input);
-        clearInput();
+        if (cur !== "" && cur !== trimmed) {
+          // 用户已输入新内容:恢复它,让用户自行提交
+          try {
+            input.text = cur;
+          } catch (e) {}
+        } else {
+          clearInput();
+        }
       });
       return;
     }
@@ -887,34 +945,13 @@
   }
 
   function translateOutgoing(text, done) {
-    const id = "s" + (++State.requestSeq).toString(36);
-    const target = resolveOutgoingTarget();
-    const url =
-      "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
-      "/bridge?id=" + id +
-      "&op=translate&text=" + encodeURIComponent(text) +
-      "&source=" + encodeURIComponent("auto") +
-      "&target=" + encodeURIComponent(target);
     const panel = ensurePanel();
     if (!panel) {
       done(null, null);
       return;
     }
     ensureBridgeEvents();
-    setPending(id, function (payload) {
-      if (payload && payload.ok && payload.translation) {
-        done(payload.translation, payload.detectedLanguage || null);
-      } else {
-        done(null, null);
-      }
-    }, State.cfg.timeoutMs || 15000);
-    try {
-      panel.SetURL(url);
-    } catch (e) {
-      State.pending = null;
-      log("outgoing SetURL failed: " + (e && e.message ? e.message : String(e)));
-      done(null, null);
-    }
+    enqueueOutgoing(text, done);
   }
 
   // ================= 设置面板 =================
@@ -1168,26 +1205,14 @@
   }
 
   function bridgePost(op, payload, done) {
-    const id = "c" + (++State.requestSeq).toString(36);
     const data = encodeURIComponent(JSON.stringify(payload || {}));
-    const url =
-      "http://" + BRIDGE_HOST + ":" + BRIDGE_PORT +
-      "/bridge?id=" + id + "&op=" + op + "&d=" + data;
     const panel = ensurePanel();
     if (!panel) {
       done({ ok: false, error: "bridge_panel_unavailable" });
       return;
     }
     ensureBridgeEvents();
-    setPending(id, done, 8000);
-    try {
-      // 页面会以 POST + JSON 请求 /api/v1/<op>
-      panel.SetURL(url);
-    } catch (e) {
-      State.pending = null;
-      log("bridgePost SetURL failed: " + (e && e.message ? e.message : String(e)));
-      done({ ok: false, error: "bridge_load_failed" });
-    }
+    enqueueBridge(op, data, done);
   }
 
   function LCTSave() {
