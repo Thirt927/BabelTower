@@ -134,3 +134,12 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 - 技术路线参考:RogueCore Chat Translator(UE4SS 思路)、
   Hantu-Raya/Deadlock-mods-collection(Apache-2.0,提供了原版 chat.xml 反编译与
   Panorama 轮询模式参考)、plainheart/bing-translate-api(公共接口协议参考)
+
+## AI 辅助开发声明
+
+本项目在开发过程中使用了 AI 编程助手(OpenClaw)辅助完成以下工作:
+- 代码编写与调试,以及聊天行回收、串行队列等缺陷的定位与修复
+- 模拟测试框架(lingua_chat_simtest.js)的编写,用于在无真人队友的环境下回归验证翻译功能
+- 构建/发布脚本的编写与维护
+
+所有代码均由作者审查并测试后发布;作者对项目的功能、质量与合规性负全责。
