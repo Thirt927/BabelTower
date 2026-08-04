@@ -28,3 +28,7 @@ config/gamebanana_cookies.txt
 config/gb_browser_profile/
 config/gamebanana_session.json
 scripts/gb_*.py
+
+# 临时提取/分析产物(不入库)
+tmp_*/
+tmp_vpk_*.txt
