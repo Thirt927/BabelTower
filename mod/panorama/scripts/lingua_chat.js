@@ -49,7 +49,7 @@
   const RETRY_DELAY_SECONDS = 0.4;
   const CACHE_LIMIT = 300;
   const SEEN_LIMIT = 500;
-  const MAX_ACTIVE_REQUESTS = 3; // 小并发:加快队列排空,降低快捷对话过期竞争
+  const MAX_ACTIVE_REQUESTS = 1; // 传输层单槽(HTML 面板+title 轮询),并发>1 会产生 supersede 竞争,保持串行
   const UNKNOWN_NAME = "<unknown>";
 
   // ---- 本地桥 ----
