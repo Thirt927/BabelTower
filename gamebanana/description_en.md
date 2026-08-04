@@ -48,3 +48,12 @@ Real-time chat translation for Deadlock. Foreign messages are translated instant
 - LGPL-3.0 licensed. Source code: https://github.com/c1375rick/BabelTower
 - The public Bing interface may occasionally be rate-limited; it retries automatically. Switch to the Microsoft provider if it's unreliable in your region.
 - This mod is not affiliated with Valve.
+
+## AI-Assisted Development Disclosure
+
+This project was developed with the help of an AI coding assistant (OpenClaw) for the following work:
+- Code writing and debugging, including locating and fixing defects such as chat-row recycling and the serial-queue concurrency issue
+- Writing the simulation test harness (`lingua_chat_simtest.js`) used to regression-test the translation feature in an environment without real teammates
+- Writing and maintaining the build/release scripts
+
+All code was reviewed and tested by the author before release; the author takes full responsibility for the project's functionality, quality, and compliance.
