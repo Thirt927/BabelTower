@@ -14,7 +14,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "0.1.1";
+  const VERSION = "0.1.2";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -347,18 +347,24 @@
   }
 
   function getTransLabel(row, sig) {
-    if (isHudRow(row)) {
-      const bubble = findClass(row, HUD_BUBBLE_CLASS);
-      if (bubble) return findChild(bubble, transLabelId(sig));
-    }
+    // 深遍历找译文标签(HUD 行挂在 MessageContents 下,普通行挂在 MessageBody 下,统一从行根找)
     return findChild(row, transLabelId(sig));
+  }
+
+  // HUD 行译文挂载点:MessageContents(ChatBubble 正下方)。
+  // 理由:游戏 CSS 确认 MessageContents 是 flow-children:down,译文位置确定在气泡下方;
+  // 直接挂 ChatBubble 会进横向流(气泡+头像+译文并排),译文被挤到气泡右侧外部看不清。
+  function hudLabelHost(row) {
+    const contents = findChild(row, MESSAGE_CONTENTS_ID);
+    if (contents) return contents;
+    return findClass(row, HUD_BUBBLE_CLASS) || row;
   }
 
   function injectTranslation(row, sig, text) {
     if (!isValid(row)) return;
     const hud = isHudRow(row);
-    // HUD 行:译文 label 挂到气泡内;普通行:挂到 MessageBody 下
-    const body = hud ? (findClass(row, HUD_BUBBLE_CLASS) || row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
+    // HUD 行:译文 label 挂到 MessageContents(ChatBubble 正下方);普通行:挂到 MessageBody 下
+    const body = hud ? hudLabelHost(row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
     let label = getTransLabel(row, sig);
     if (!isValid(label)) {
       try {
@@ -396,7 +402,7 @@
   function injectError(row, sig, message) {
     if (!isValid(row)) return;
     const hud = isHudRow(row);
-    const body = hud ? (findClass(row, HUD_BUBBLE_CLASS) || row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
+    const body = hud ? hudLabelHost(row) : (findClass(row, MESSAGE_BODY_CLASS) || row);
     let label = getTransLabel(row, sig);
     if (!isValid(label)) {
       try {
@@ -837,10 +843,12 @@
         contents.style.visibility = "visible";
       }
     } catch (e) {}
-    // 收集译文标签所在容器(普通行:MessageBody;HUD 行:ChatBubble)
+    // 收集译文标签所在容器(普通行:MessageBody;HUD 行:MessageContents)
     const containers = [];
     const body = findClass(row, MESSAGE_BODY_CLASS);
     if (isValid(body)) containers.push(body);
+    const contents = findChild(row, MESSAGE_CONTENTS_ID);
+    if (isValid(contents)) containers.push(contents);
     const bubble = findClass(row, HUD_BUBBLE_CLASS);
     if (isValid(bubble)) containers.push(bubble);
     containers.push(row);
