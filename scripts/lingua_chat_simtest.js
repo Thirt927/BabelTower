@@ -337,9 +337,12 @@ async function test9_hudTopBarTranslation() {
   await sleep(300);
   const labels = row.FindChildrenWithClassTraverse("LCTTranslationHud");
   const bubble = row.FindChildrenWithClassTraverse("ChatBubble")[0];
+  const contents = row.FindChildTraverse("MessageContents");
   assert("translation label injected in HUD bubble", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
   assert("label text is Chinese (not raw English)", labels[0] && labels[0].text.indexOf("hello") === -1, labels[0] && labels[0].text);
-  assert("label is child of ChatBubble", labels[0] && labels[0].GetParent() === bubble);
+  // 译文挂在 MessageContents 下(ChatBubble 正下方),不能在气泡旁边横向流里
+  assert("label is child of MessageContents (below bubble)", labels[0] && labels[0].GetParent() === contents, "parent=" + (labels[0] && labels[0].GetParent() && labels[0].GetParent().GetType && labels[0].GetParent().GetType()));
+  assert("label NOT inside ChatBubble", !(labels[0] && labels[0].GetParent() === bubble));
   assert("HUD bubble NOT collapsed (translation_only keeps bubble)", row.FindChildTraverse("MessageContents").style.visibility === "visible", row.FindChildTraverse("MessageContents").style.visibility);
 }
 

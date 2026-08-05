@@ -309,9 +309,9 @@
 }
 
 /* ---- HUD 顶栏聊天气泡内译文(citadel_hud_top_bar_chat) ----
-   游戏气泡是浅色底(薄荷绿渐变 #D9FFEE->#a4c7b7,原文为黑字 15px),
-   白字直接贴浅底会看不清 => 译文用深色底白字胶囊,
-   与气泡文本同字号(15px),margin-left 对齐气泡文本起始(TextContainer 的 margin-left 也是 20px)。 */
+   译文挂在 MessageContents 内(ChatBubble 正下方,该容器 flow-children:down 已确认),
+   游戏气泡本身是浅色底(薄荷绿渐变,原文黑字 15px)=> 译文用深色胶囊白字,保证可读;
+   margin-left 对齐气泡左侧(行 padding 10px)。敌方气泡右对齐时用下方规则右对齐。 */
 .LCTTranslationHud {
   background-color: rgba(8, 10, 14, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -322,18 +322,26 @@
   letter-spacing: 0.2px;
   margin-top: 4px;
   margin-bottom: 4px;
-  margin-left: 20px;
-  margin-right: 8px;
+  margin-left: 10px;
+  margin-right: 10px;
   max-width: 220px;
   padding: 3px 8px;
   white-space: normal;
 }
 
+/* 敌方 HUD 气泡右对齐 -> 译文也跟着右对齐 */
+.enemy .ChatMessage .LCTTranslationHud,
+.team2 .ChatMessage .LCTTranslationHud {
+  horizontal-align: right;
+  margin-left: 0px;
+  margin-right: 20px;
+}
+
 /* HUD 译文失败提示:保持深色胶囊,文字用浅红(覆盖普通行错误样式的 58px 左偏移) */
 .LCTTranslationHud.LCTTranslationError {
   color: #ff9b94;
-  margin-left: 20px;
-  margin-right: 8px;
+  margin-left: 10px;
+  margin-right: 10px;
 }
 
 /* ---- HUD 测试译文浮层(!lcttest 专用;挂在顶栏 chat 根面板下,
