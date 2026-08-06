@@ -5,7 +5,7 @@
 
 ## 1. 本项目代码
 
-- 许可证:GNU Lesser General Public License v3.0(见 [LICENSE](LICENSE))
+- 许可证:GNU General Public License v3.0(见 [LICENSE](LICENSE))
 - 内部代号 LCT / lingua_chat 与对外品牌 Babel Tower 指同一项目
 
 ## 2. Valve 游戏素材(保留原样,版权归 Valve)
