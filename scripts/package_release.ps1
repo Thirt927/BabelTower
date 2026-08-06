@@ -36,10 +36,12 @@ Copy-Item $vpk (Join-Path $Stage "pak01_dir.vpk")
 Write-Host "==> 复制本地桥..."
 Copy-Item (Join-Path $Root "core\bridge_server.js") (Join-Path $Stage "core\")
 Copy-Item (Join-Path $Root "core\config.js") (Join-Path $Stage "core\")
+Copy-Item (Join-Path $Root "core\dictionary.js") (Join-Path $Stage "core\")
 Copy-Item (Join-Path $Root "core\providers\*.js") (Join-Path $Stage "core\providers\")
 
 Write-Host "==> 复制配置示例与脚本..."
 Copy-Item (Join-Path $Root "config\config.example.json") (Join-Path $Stage "config\")
+Copy-Item (Join-Path $Root "config\dictionary.json") (Join-Path $Stage "config\")
 Copy-Item (Join-Path $Root "scripts\autostart.ps1") (Join-Path $Stage "scripts\")
 Copy-Item (Join-Path $Root "StartDeadlock.bat") (Join-Path $Stage "StartDeadlock.bat")
 # 双击即用的自启安装/卸载包装(内部自动处理路径)

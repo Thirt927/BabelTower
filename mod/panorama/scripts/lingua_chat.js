@@ -14,7 +14,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "0.1.2";
+  const VERSION = "0.1.2-beta.2";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -55,6 +55,7 @@
   const BRIDGE_ALIVE_SECONDS = 1.5; // 桥页面存活标记的等待上限
   const RETRY_LIMIT = 2; // 每条消息最多尝试次数(含首次)
   const RETRY_DELAY_SECONDS = 0.4;
+  const OUTGOING_TIMEOUT_MS = 2000; // 发送翻译超时:超过则按原文发送,避免卡住重复按键
   const CACHE_LIMIT = 300;
   const SEEN_LIMIT = 500;
   const MAX_ACTIVE_REQUESTS = 1; // 传输层单槽(HTML 面板+title 轮询),并发>1 会产生 supersede 竞争,保持串行
@@ -85,6 +86,7 @@
     queue: [], // 待翻译任务
     activeRequests: 0,
     requestSeq: 0,
+    outgoingPending: null, // 发送翻译中的文本(去重:同文本重复按 Enter 忽略)
     panel: null, // 隐藏 HTML 桥面板(在 chat.xml 中用 <HTML> 标签声明)
     panelLogged: false,
     eventsRegistered: false,
@@ -453,7 +455,18 @@
   }
 
   function enqueueOutgoing(text, done) {
-    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: text }, attempts: 0, done: done });
+    // 超时兜底:翻译超过 2 秒未返回,按原文发送,避免用户等待/重复按键
+    // (done 只允许触发一次:正常返回或超时,谁先到谁生效)
+    let settled = false;
+    const once = function (translated, detected) {
+      if (settled) return;
+      settled = true;
+      done(translated, detected);
+    };
+    State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: text }, attempts: 0, done: once });
+    setTimeout(function () {
+      once(null, null);
+    }, OUTGOING_TIMEOUT_MS);
     pumpQueue();
   }
 
@@ -1122,7 +1135,17 @@
     const outgoingMode = State.cfg.outgoing || "off";
     if (State.cfg.enabled && outgoingMode !== "off" && trimmed.charAt(0) !== "/") {
       const outTarget = resolveOutgoingTarget();
+      // 防重复发送:同一文本翻译中,重复按 Enter 直接忽略(避免队列积压发多条)
+      // 不同文本则排队(前一文本的翻译结果已提交,不冲突)
+      if (State.outgoingPending === trimmed) {
+        log("outgoing dedupe: same text pending, ignored: " + trimmed.slice(0, 40));
+        return;
+      }
+      State.outgoingPending = trimmed;
+      // 立即清空输入框:视觉反馈"已发送",不再误以为没发出去而重复按键
+      clearInput();
       translateOutgoing(trimmed, function (translated, detected) {
+        State.outgoingPending = null;
         let send = trimmed;
         if (translated && translated !== trimmed && !sameLanguage(detected, outTarget)) {
           if (outgoingMode === "translation") send = String(translated).trim();

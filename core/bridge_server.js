@@ -27,9 +27,46 @@ const { execFile } = require("child_process");
 
 const configStore = require("./config");
 const providerRegistry = require("./providers/registry");
+const dictionary = require("./dictionary");
+// 首次运行生成词典文件;桥启动后自动落盘高频词(自适应学习)
+dictionary.ensureFile();
+dictionary.startAutoFlush();
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TEXT_CHARS = 4000; // 单条聊天文本长度上限
+
+// ---------- 翻译结果缓存(同文本二次秒回,避免重复走 Bing) ----------
+// 聊天场景重复度高(gg/glhf/thanks 等高频短语),缓存命中直接返回,零网络开销。
+const TRANS_CACHE_LIMIT = 500;
+const TRANS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 分钟,覆盖整局对局
+const transCache = new Map(); // key: text + target -> { translation, detectedLanguage, ts }
+
+function cacheKey(text, target) {
+  return String(text).toLowerCase().slice(0, 200) + "\x00" + String(target || "").toLowerCase();
+}
+
+function transCacheGet(text, target) {
+  const key = cacheKey(text, target);
+  const hit = transCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > TRANS_CACHE_TTL_MS) {
+    transCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function transCacheSet(text, target, translation, detectedLanguage) {
+  if (transCache.size >= TRANS_CACHE_LIMIT) {
+    const oldestKey = transCache.keys().next().value;
+    if (oldestKey !== undefined) transCache.delete(oldestKey);
+  }
+  transCache.set(cacheKey(text, target), {
+    translation: translation,
+    detectedLanguage: detectedLanguage,
+    ts: Date.now(),
+  });
+}
 
 // ---------- 日志(可选落盘,绝不含 apiKey) ----------
 let activeConfig = null;
@@ -129,6 +166,18 @@ async function runTranslate(cfg, payload) {
   if (!text) throw Object.assign(new Error("空文本"), { status: 400 });
   if (text.length > MAX_TEXT_CHARS) throw Object.assign(new Error("文本过长"), { status: 400 });
 
+  // 词典直译优先:短词/常用语不走在线翻译,结果稳定(修复 gg 等短词译文=原文的抖动)
+  const dictHit = dictionary.lookup(text, payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans");
+  if (dictHit) return dictHit;
+
+  // 缓存命中:同文本直接返回上次结果(词典未覆盖的长句/短语重复出现时,零网络延迟)
+  const targetLang = payload.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans";
+  const cached = transCacheGet(text, targetLang);
+  if (cached) {
+    log("info", "cache hit: " + String(text).slice(0, 60).replace(/\s+/g, " "));
+    return { translation: cached.translation, detectedLanguage: cached.detectedLanguage, viaCache: true };
+  }
+
   const providerCfg = (cfg[provider.id] || {});
   const result = await provider.translate(text, {
     apiKey: providerCfg.apiKey,
@@ -189,6 +238,25 @@ async function handleApi(req, res, url, bodyObj) {
     const cfg = configStore.load();
     try {
       const result = await runTranslate(cfg, bodyObj);
+      // 缓存非词典命中结果(词典结果本身零延迟,无需缓存;缓存命中已直接返回)
+      if (result && !result.viaDictionary && !result.viaCache) {
+        transCacheSet(
+          String(bodyObj.text || "").trim(),
+          bodyObj.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans",
+          result.translation,
+          result.detectedLanguage
+        );
+      }
+      // 自适应学习:每次成功翻译都记录(含缓存命中——缓存命中同样是"该文本又出现一次"),
+      // 高频词(同一译文 >= 3 次)自动固化进词典。词典内部会跳过已在表内的词。
+      if (result && !result.viaDictionary) {
+        dictionary.record(
+          String(bodyObj.text || "").trim(),
+          bodyObj.targetLanguage || cfg.defaults.targetLanguage || "zh-Hans",
+          result.translation,
+          result.detectedLanguage
+        );
+      }
       log("info", "translate ok: " + String(bodyObj.text || "").slice(0, 60).replace(/\s+/g, " "));
       sendJson(res, 200, {
         ok: true,
