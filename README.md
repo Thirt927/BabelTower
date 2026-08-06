@@ -24,8 +24,10 @@ BabelTower/
 ├── core/                  本地翻译桥(Node.js,零依赖)
 │   ├── bridge_server.js      桥服务器 + 隐藏面板页面
 │   ├── config.js             本地配置管理(apiKey 打码)
+│   ├── dictionary.js         自适应学习词典(短词直译,见下方教程)
 │   └── providers/            Bing(免 Key)/ Microsoft 双服务商
 ├── config/config.example.json  桥配置示例(复制为 config.json 使用)
+├── config/dictionary.json   词典数据(user 手动 + learned 自动学习)
 ├── scripts/build.ps1       编译 + 打包 VPK 脚本
 ├── scripts/autostart.ps1   开机自启安装/卸载
 ├── StartDeadlock.bat       手动启动:桥 + 游戏
@@ -82,6 +84,53 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 - 纯数字/符号、指令(`/` 开头)不翻译
 - 翻译失败自动重试一次,仍失败显示红字错误
 - 聊天滚动/回收后,译文会从缓存自动重建
+
+## 翻译词典(自适应学习)
+
+词典用于**稳定短句/游戏术语的翻译**:命中词典的词条直接查表返回(毫秒级),
+不走翻译服务商,避免 Bing 对短词(如 `gg`、`mid`)翻译结果抖动的问题。
+
+### 自动学习(无需手动操作)
+
+- 词典**空表起步**,随着游戏进行自动累积你常用的短句
+- 学习规则:纯 ASCII 短文本(≤30 字符、≤5 个词)+ 译文 ≠ 原文
+- 同一译文**出现 3 次 → 立即固化落盘**,之后该词条查表秒回
+- 防误译保护:译文与原文相同、或译文只有 1 个字符而原文是 2+ 字母词(如 `gank`→`去`)
+  等可疑结果不会被学习
+
+### 手动编辑(config/dictionary.json)
+
+文件结构(`config/dictionary.json`,桥运行目录下):
+
+```json
+{
+  "user": {
+    "zh": {
+      "glhf": "祝好运，玩得开心"
+    }
+  },
+  "learned": {}
+}
+```
+
+- **`user` 区**:你手动写的词条(程序不覆盖,优先于 learned 生效)
+  - 固定词条、或 Bing 某词翻得不好时,直接写这里覆盖
+- **`learned` 区**:程序自动学习写入,**不要手动编辑**(下次固化会被覆盖)
+- **语言前缀**:`zh`(简中/繁中)、`en`、`ja`、`ko`、`fr`、`de`、`es` 等,
+  按你在设置里选的**目标语言**匹配(zh-Hans/zh-CN/zh-TW 都命中 `zh`)
+- 修改后**重启桥**(或等下次自动加载)生效
+
+### 关闭词典
+
+在 `config/config.json` 里加:
+
+```json
+{
+  "dictionary": { "enabled": false }
+}
+```
+
+关闭后所有词条都走翻译服务商(不查表、不学习)。
 
 ## 翻译服务商
 
