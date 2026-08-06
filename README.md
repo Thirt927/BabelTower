@@ -6,7 +6,7 @@
 - 架构:全景(游戏内 Panorama 界面)+ 本地翻译桥(Node.js 本地服务)+ 翻译服务商
 - 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft Translator(Azure Key)
 - 原理:聊天行扫描 → 去重/缓存 → 隐藏 HTML 面板桥接本地服务 → 译文追加显示
-- 许可证:**GNU LGPL v3**,见 [LICENSE](LICENSE)
+- 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
 > 状态:核心(本地桥)与游戏内界面均已实测可用;游戏内部分依赖 Valve 反编译结构与
 > 已验证的 API 模式,详见 [docs/development.md](docs/development.md)。
@@ -178,7 +178,7 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 
 ## 许可证与致谢
 
-- 本项目代码:**GNU LGPL v3**,见 [LICENSE](LICENSE) 与 [LICENSE_NOTICE.md](LICENSE_NOTICE.md)
+- 本项目代码:**GNU GPL v3**,见 [LICENSE](LICENSE) 与 [LICENSE_NOTICE.md](LICENSE_NOTICE.md)
 - 原版聊天布局结构(chat.xml 中的 Valve 素材片段):保留原样以保证功能,版权归 Valve
 - 技术路线参考:RogueCore Chat Translator(UE4SS 思路)、
   Hantu-Raya/Deadlock-mods-collection(Apache-2.0,提供了原版 chat.xml 反编译与

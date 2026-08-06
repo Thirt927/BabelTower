@@ -46,7 +46,7 @@
 
 ## 说明
 
-- LGPL-3.0 协议;源代码:https://github.com/c1375rick/BabelTower
+- GPL-3.0 协议;源代码:https://github.com/c1375rick/BabelTower
 - Bing 公共接口偶发限流,会自动重试;你所在地区不稳定时可切换 Microsoft 服务商
 - 本 Mod 与 Valve 无关
 
