@@ -1,0 +1,135 @@
+// Babel Tower - GameBanana 文件替换 + 版本号更新脚本 (v2)
+// 结构(2026-08-06 实测):
+//   - 文件区: fieldset#Files 内的 input[type=file] (display:none, id 动态: xxx_FileInput)
+//   - 全局版本: fieldset#Version 内 input[type=text] (value=0.1.1)
+//   - 保存: fieldset.Submit button[type=submit] ("Save")
+// 用法: node gb_update_files.js 0.1.2-beta.1
+const puppeteer = require("puppeteer-core");
+const fs = require("fs");
+const path = require("path");
+
+const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+const PROFILE = "F:\\BabelTower\\config\\gb_browser_profile";
+const EDIT_URL = "https://gamebanana.com/mods/edit/700107";
+const MOD_URL = "https://gamebanana.com/mods/700107";
+
+const version = process.argv[2] || "0.1.2-beta.1";
+const zipPath = path.join("F:\\BabelTower\\dist", `BabelTower-${version}-win64.zip`);
+if (!fs.existsSync(zipPath)) { console.error("ZIP NOT FOUND:", zipPath); process.exit(1); }
+console.log("ZIP:", zipPath, "size:", fs.statSync(zipPath).size);
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  const browser = await puppeteer.launch({
+    executablePath: EDGE, userDataDir: PROFILE, headless: "new",
+    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+  });
+  const page = await browser.newPage();
+  await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+
+  await page.goto(EDIT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await sleep(5000);
+  console.log("EDIT TITLE:", await page.title());
+
+  // ---- 定位 Files 区的 file input ----
+  const fileInput = await page.evaluate(() => {
+    const fs = document.getElementById("Files");
+    if (!fs) return null;
+    const inp = fs.querySelector("input[type=file]");
+    return inp ? { id: inp.id, name: inp.name } : null;
+  });
+  console.log("FILES INPUT:", JSON.stringify(fileInput));
+  if (!fileInput) { console.log("NO_FILES_INPUT"); await browser.close(); process.exit(1); }
+
+  // ---- 上传前文件行基线 ----
+  const rowInfo = () => page.evaluate(() => {
+    const fs = document.getElementById("Files");
+    if (!fs) return { count: 0, rows: [] };
+    // 文件行:Files 区内的 tr/li/div 行,取含版本输入框或文件名的
+    const versionInputs = [...fs.querySelectorAll("input[type=text]")];
+    const rows = versionInputs.map(i => {
+      const row = i.closest("tr") || i.closest("li") || i.parentElement.parentElement;
+      return row ? row.innerText.replace(/\s+/g, " ").trim().slice(0, 140) : "";
+    }).filter(Boolean);
+    return { count: rows.length, rows };
+  });
+  const before = await rowInfo();
+  console.log("BEFORE FILE ROWS:", JSON.stringify(before));
+
+  // ---- 上传 ----
+  const handle = await page.$(`#Files input[type=file]`);
+  await handle.uploadFile(zipPath);
+  console.log("UPLOAD TRIGGERED, waiting...");
+
+  let uploaded = false;
+  for (let i = 0; i < 72; i++) { // 最多 6 分钟
+    await sleep(5000);
+    const cur = await rowInfo();
+    if (cur.count > before.count) {
+      console.log(`[${(i + 1) * 5}s] rows ${before.count} -> ${cur.count}`);
+      console.log("ROWS NOW:", JSON.stringify(cur.rows, null, 1));
+      uploaded = true;
+      break;
+    }
+    if (i % 6 === 5) console.log(`[${(i + 1) * 5}s] waiting... rows=${cur.count}`);
+  }
+  if (!uploaded) { console.log("UPLOAD_TIMEOUT"); await browser.close(); process.exit(1); }
+
+  // ---- 新行填版本号(最后一行) ----
+  const fillRow = await page.evaluate((ver) => {
+    const fs = document.getElementById("Files");
+    const inputs = [...fs.querySelectorAll("input[type=text]")];
+    const target = inputs[inputs.length - 1];
+    if (!target) return { ok: false };
+    const proto = Object.getPrototypeOf(target);
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(target, ver);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.dispatchEvent(new Event("change", { bubbles: true }));
+    return { ok: true, value: target.value, id: target.id, name: target.name };
+  }, version);
+  console.log("ROW VERSION FILL:", JSON.stringify(fillRow));
+  await sleep(1000);
+
+  // ---- 全局 Version 字段 ----
+  const fillGlobal = await page.evaluate((ver) => {
+    const vf = document.getElementById("Version");
+    if (!vf) return { ok: false, reason: "no Version fieldset" };
+    const inp = vf.querySelector("input[type=text]");
+    if (!inp) return { ok: false, reason: "no input in Version" };
+    const old = inp.value;
+    const proto = Object.getPrototypeOf(inp);
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(inp, ver);
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    inp.dispatchEvent(new Event("change", { bubbles: true }));
+    return { ok: true, old, now: inp.value };
+  }, version);
+  console.log("GLOBAL VERSION FILL:", JSON.stringify(fillGlobal));
+  await sleep(1000);
+
+  // ---- Save ----
+  const saved = await page.evaluate(() => {
+    const btn = document.querySelector("fieldset.Submit button[type=submit]");
+    if (!btn) return { ok: false };
+    btn.click();
+    return { ok: true, text: (btn.innerText || "").trim() };
+  });
+  console.log("SAVE CLICK:", JSON.stringify(saved));
+  if (!saved.ok) { console.log("NO_SAVE_BUTTON"); await browser.close(); process.exit(1); }
+
+  // 保存后导航,重新打开验证
+  await sleep(10000);
+  try { await page.goto(MOD_URL, { waitUntil: "domcontentloaded", timeout: 60000 }); } catch (e) { console.log("nav err (expected):", e.message); }
+  await sleep(4000);
+  const verify = await page.evaluate(() => {
+    const text = document.body.innerText;
+    const lines = text.split("\n").map(l => l.trim()).filter(l => /\.zip|Added|Version|Archived/i.test(l)).slice(0, 25);
+    return lines;
+  });
+  console.log("VERIFY:", JSON.stringify(verify, null, 1));
+
+  await browser.close();
+  console.log("DONE");
+})().catch(e => { console.error("ERR:", e.message); process.exit(1); });
