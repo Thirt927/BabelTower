@@ -199,14 +199,23 @@
   background-color: gradient( linear, 0% 0%, 0% 100%, from( #13181d ), to( #0d1115 ) );
 }
 
+/* 状态栏(独立一行, 避免被 footer 水平流挤压) */
+.LCTStatusBar {
+  width: 100%;
+  height: 30px;
+  flow-children: none;
+  padding: 0px 15px;
+  border-bottom: 1px solid rgba(255, 252, 244, 0.06);
+  background-color: rgba(13, 17, 21, 0.85);
+}
 .LCTStatusLabel {
   vertical-align: center;
   color: #9fb4d0;
   font-size: 12px;
-  margin-left: 12px;
-  width: fill-parent-flow(1.0);
+  width: 100%;
   text-overflow: shrink;
   white-space: normal;
+  max-height: 100%;
 }
 
 .LCTKeyHint {
