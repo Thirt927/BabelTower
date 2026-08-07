@@ -10,8 +10,31 @@ const path = require("path");
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
+const COOKIES_FILE = "<PROJECT_DIR>\\config\\gamebanana_cookies.txt";
 const EDIT_URL = "https://gamebanana.com/mods/edit/700107";
 const MOD_URL = "https://gamebanana.com/mods/700107";
+
+// 从 cookies 文件注入登录态(sess/rmc/cf_clearance),避免每次手动登录
+async function loadCookies(page) {
+  if (!fs.existsSync(COOKIES_FILE)) { console.log("NO COOKIES FILE"); return; }
+  const raw = fs.readFileSync(COOKIES_FILE, "utf8").trim();
+  if (!raw) return;
+  const pairs = raw.split(";").map(s => s.trim()).filter(Boolean).map(s => {
+    const i = s.indexOf("=");
+    return { name: s.slice(0, i), value: s.slice(i + 1) };
+  });
+  // 同 name 多值(cf_clearance 可能有两个)只取最后一个
+  const merged = new Map();
+  pairs.forEach(p => merged.set(p.name, p.value));
+  const cookies = [...merged.entries()].map(([name, value]) => ({
+    name, value, domain: ".gamebanana.com", path: "/",
+    httpOnly: name === "sess", secure: true,
+  }));
+  if (cookies.length) {
+    await page.setCookie(...cookies);
+    console.log("COOKIES LOADED:", cookies.map(c => c.name).join(", "));
+  }
+}
 
 const version = process.argv[2] || "0.1.2-beta.1";
 const zipPath = path.join("<PROJECT_DIR>\\dist", `BabelTower-${version}-win64.zip`);
@@ -22,23 +45,33 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   const browser = await puppeteer.launch({
-    executablePath: EDGE, userDataDir: PROFILE, headless: "new",
-    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+    executablePath: EDGE, userDataDir: PROFILE, headless: false, // 可见窗口, 过 Cloudflare 更稳
+    args: ["--no-sandbox", "--disable-blink-features=AutomationControlled", "--ignore-certificate-errors"],
   });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+
+  // 注入已保存的登录态
+  await loadCookies(page);
 
   await page.goto(EDIT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
   await sleep(5000);
   console.log("EDIT TITLE:", await page.title());
 
-  // ---- 定位 Files 区的 file input ----
-  const fileInput = await page.evaluate(() => {
-    const fs = document.getElementById("Files");
-    if (!fs) return null;
-    const inp = fs.querySelector("input[type=file]");
-    return inp ? { id: inp.id, name: inp.name } : null;
-  });
+  // 等待 Files 区出现(可能被 Cloudflare/JS 延迟),最多等 60s
+  let fileInput = null;
+  for (let i = 0; i < 12; i++) {
+    fileInput = await page.evaluate(() => {
+      const fs = document.getElementById("Files");
+      if (!fs) return null;
+      const inp = fs.querySelector("input[type=file]");
+      return inp ? { id: inp.id, name: inp.name } : null;
+    });
+    if (fileInput) break;
+    const bodyText = await page.evaluate(() => (document.body.innerText || "").slice(0, 200).replace(/\s+/g, " "));
+    console.log(`  [${(i + 1) * 5}s] waiting Files... body:`, bodyText.slice(0, 120));
+    await sleep(5000);
+  }
   console.log("FILES INPUT:", JSON.stringify(fileInput));
   if (!fileInput) { console.log("NO_FILES_INPUT"); await browser.close(); process.exit(1); }
 
