@@ -160,6 +160,9 @@
 					</Panel>
 				</Panel>
 			</Panel>
+			<Panel class="LCTStatusBar">
+				<Label id="LCTStatusLabel" class="LCTStatusLabel" text="" />
+			</Panel>
 			<Panel class="LCTSettingsFooter">
 				<Button id="LCTSaveBtn" class="LCTBtn LCTBtnSave" onactivate="LCTSave();">
 					<Label text="保存" />
@@ -167,7 +170,6 @@
 				<Button id="LCTTestBtn" class="LCTBtn LCTBtnTest" onactivate="LCTTest();">
 					<Label text="测试" />
 				</Button>
-				<Label id="LCTStatusLabel" class="LCTStatusLabel" text="" />
 				<Label class="LCTKeyHint" text="选项点击选择 · 改完点保存 · ESC 关闭" />
 			</Panel>
 		</Panel>
