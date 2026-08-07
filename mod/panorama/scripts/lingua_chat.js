@@ -55,7 +55,7 @@
   const BRIDGE_ALIVE_SECONDS = 1.5; // 桥页面存活标记的等待上限
   const RETRY_LIMIT = 2; // 每条消息最多尝试次数(含首次)
   const RETRY_DELAY_SECONDS = 0.4;
-  const OUTGOING_TIMEOUT_MS = 2000; // 发送翻译超时:超过则按原文发送,避免卡住重复按键
+  const OUTGOING_TIMEOUT_MS = 4000; // 出站翻译超时:超过则按原文发送,避免卡住重复按键。4s 覆盖桥冷启动时 Bing 首次拉 token 页(2-4s);计时从任务开始处理算起(见 dispatchJob)
   const CACHE_LIMIT = 300;
   const SEEN_LIMIT = 500;
   const MAX_ACTIVE_REQUESTS = 1; // 传输层单槽(HTML 面板+title 轮询),并发>1 会产生 supersede 竞争,保持串行
@@ -455,7 +455,9 @@
   }
 
   function enqueueOutgoing(text, done) {
-    // 超时兜底:翻译超过 2 秒未返回,按原文发送,避免用户等待/重复按键
+    // 超时兜底:翻译超过 OUTGOING_TIMEOUT_MS 未返回,按原文发送,避免用户等待/重复按键。
+    // 计时放在 dispatchJob(任务真正开始处理时),排队等待不计入——
+    // 否则连续快速发 3 条时,第 3 条还在排队就已超时,直接发原文。
     // (done 只允许触发一次:正常返回或超时,谁先到谁生效)
     let settled = false;
     const once = function (translated, detected) {
@@ -464,9 +466,6 @@
       done(translated, detected);
     };
     State.queue.push({ kind: "outgoing", row: null, sig: null, record: { text: text }, attempts: 0, done: once });
-    setTimeout(function () {
-      once(null, null);
-    }, OUTGOING_TIMEOUT_MS);
     pumpQueue();
   }
 
@@ -544,10 +543,17 @@
       return;
     }
     ensureBridgeEvents();
+    // 出站翻译超时计时从此刻(开始处理)算起;排队等待不计入
+    if (job.kind === "outgoing") {
+      job._timeout = setTimeout(function () {
+        job.done(null, null);
+      }, OUTGOING_TIMEOUT_MS);
+    }
     const url = buildBridgeUrl(job);
     setPending(job.id, function (payload) {
       if (job.kind === "outgoing") {
         // 出站翻译:不重试,结果直接回传(失败则发原文)
+        if (job._timeout) clearTimeout(job._timeout);
         if (payload && payload.ok && payload.translation) {
           job.done(payload.translation, payload.detectedLanguage || null);
         } else {
@@ -569,6 +575,7 @@
       State.pending = null;
       log("SetURL failed: " + (e && e.message ? e.message : String(e)));
       if (job.kind === "outgoing") {
+        if (job._timeout) clearTimeout(job._timeout);
         job.done(null, null);
         finishJob();
       } else if (job.kind === "bridge") {
@@ -1150,6 +1157,12 @@
         if (translated && translated !== trimmed && !sameLanguage(detected, outTarget)) {
           if (outgoingMode === "translation") send = String(translated).trim();
           else if (outgoingMode === "bilingual") send = trimmed + " | " + String(translated).trim();
+        } else if (!translated) {
+          // 翻译不可用/超时:按原文发送,但必须留日志,否则用户看到原文会以为服务商坏了
+          log("outgoing: translation unavailable (timeout/error), sending original");
+        } else if (translated === trimmed || sameLanguage(detected, outTarget)) {
+          // 目标语言与原文相同(en->en 等):不发无用译文
+          log("outgoing: no-op (detected=" + (detected || "unknown") + " == target), sending original");
         }
         log("outgoing mode=" + outgoingMode + " detected=" + (detected || "-") + " -> " + send.slice(0, 80));
         // 覆盖前先捕获当前输入框内容:若用户已输入新消息,不能丢失

@@ -88,9 +88,12 @@
   color: #ffffff;
 }
 
-/* 主体与滚动列表 */
+/* 主体与滚动列表
+   注意:Body 必须给确定高度(fill-parent-flow),否则 List 的 fill-parent-flow
+   会按内容高度解析(~650px),把底部保存/测试按钮挤出 560px 面板外(用户看不到保存按钮)。 */
 .LCTSettingsBody {
   width: 100%;
+  height: fill-parent-flow(1.0);
   flow-children: down;
 }
 
