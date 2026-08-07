@@ -146,6 +146,16 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 2. 设置面板:服务商切到 `microsoft`,填入 Key(区域按需)
 3. 点**测试**验证
 
+## 更新规划(Roadmap)
+
+> 以下为计划中的方向,尚未实现,具体以发布为准。
+
+- **更多翻译接口**:Google / DeepL / OpenAI 兼容接口,主服务商失败时自动回退
+- **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
+- **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
+- **游戏术语表**:预置 Deadlock 常用术语翻译(push/ult/lane 等),其他语言自动学习积累
+- **Linux 移植**:支持 Steam Deck / Proton 环境
+
 ## 从源码构建 VPK
 
 需要 [Reduced CSDK 12](https://deadlockmodding.pages.dev/modding-tools/csdk-12) 与
