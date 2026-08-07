@@ -1222,10 +1222,29 @@
       if (typeof panel.SetHasClass === "function") panel.SetHasClass(SETTINGS_VISIBLE_CLASS, true);
     } catch (e) {}
     syncPanelFromConfig();
-    // 读取当前配置:若已保存过 Key,回显占位符,避免用户误清
+    // 从桥拉取已保存配置:回填 UI 偏好(游戏重启后恢复) + apiKey 占位符
     bridgePost("config", {}, function (res) {
-      if (res && res.ok && res.config && res.config.microsoft && res.config.microsoft.hasApiKey) {
-        setFieldText("LCTApiKey", "********");
+      if (res && res.ok && res.config) {
+        const c = res.config;
+        if (c.ui) {
+          let changed = false;
+          if (typeof c.ui.displayMode === "string") { State.cfg.displayMode = c.ui.displayMode; changed = true; }
+          if (typeof c.ui.outgoing === "string") { State.cfg.outgoing = c.ui.outgoing; changed = true; }
+          if (typeof c.ui.outgoingTarget === "string") { State.cfg.outgoingTarget = c.ui.outgoingTarget; changed = true; }
+          if (typeof c.ui.targetLanguage === "string") { State.cfg.targetLanguage = c.ui.targetLanguage; changed = true; }
+          if (typeof c.ui.enabled === "boolean") { State.cfg.enabled = c.ui.enabled; changed = true; }
+          if (typeof c.ui.force === "boolean") { State.cfg.force = c.ui.force; changed = true; }
+          if (typeof c.ui.provider === "string") { State.cfg.provider = c.ui.provider; changed = true; }
+          if (typeof c.ui.timeoutMs === "number") { State.cfg.timeoutMs = c.ui.timeoutMs; changed = true; }
+          if (changed) {
+            syncPanelFromConfig();
+            saveUiConfig();
+          }
+        }
+        // apiKey 占位符必须在 syncPanelFromConfig 之后设置(否则会被其清空)
+        if (c.microsoft && c.microsoft.hasApiKey) {
+          setFieldText("LCTApiKey", "********");
+        }
       }
     });
     // 聚焦面板本身(与 DLCT 一致:优先控件,失败则面板;面板持焦后 Tab/Enter 可用)
@@ -1445,9 +1464,23 @@
       apiKey: fieldValue("LCTApiKey"),
       region: fieldValue("LCTRegion"),
       targetLanguage: targetLang,
+      sourceLanguage: "auto",
       displayMode: State.cfg.displayMode || "bilingual",
+      outgoing: State.cfg.outgoing || "off",
       outgoingTarget: outgoingTarget,
+      enabled: !!State.cfg.enabled,
+      force: !!State.cfg.force,
       timeoutMs: Number(fieldValue("LCTTimeout")) || 15000,
+      ui: {
+        enabled: !!State.cfg.enabled,
+        provider: State.cfg.provider || "bing",
+        displayMode: State.cfg.displayMode || "bilingual",
+        outgoing: State.cfg.outgoing || "off",
+        outgoingTarget: outgoingTarget,
+        targetLanguage: targetLang,
+        force: !!State.cfg.force,
+        timeoutMs: Number(fieldValue("LCTTimeout")) || 15000,
+      },
     };
   }
 
@@ -1470,7 +1503,10 @@
       if (res && res.ok) {
         State.cfg.targetLanguage = p.targetLanguage;
         State.cfg.displayMode = p.displayMode;
+        State.cfg.outgoing = p.outgoing;
         State.cfg.outgoingTarget = p.outgoingTarget;
+        State.cfg.enabled = p.enabled;
+        State.cfg.force = p.force;
         State.cfg.timeoutMs = p.timeoutMs;
         saveUiConfig();
         setStatus("已保存");
