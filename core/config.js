@@ -21,6 +21,17 @@ const DEFAULTS = {
   },
   timeoutMs: 15000,
   maxQueue: 200,
+  // 游戏面板 UI 偏好(经桥持久化,避免游戏重启丢失)
+  ui: {
+    enabled: true,
+    provider: "bing",
+    displayMode: "bilingual",
+    outgoing: "off",
+    outgoingTarget: "en",
+    targetLanguage: "zh-Hans",
+    force: false,
+    timeoutMs: 15000,
+  },
   // 进程监视:Deadlock 退出时桥自动关闭(设为 false 或启动参数 --no-watch 可禁用)
   watchGame: true,
   watchGameExe: "deadlock.exe",
@@ -100,6 +111,7 @@ function mask(cfg) {
       targetLanguage: (cfg.defaults && cfg.defaults.targetLanguage) || "zh-Hans",
     },
     timeoutMs: cfg.timeoutMs,
+    ui: Object.assign({}, DEFAULTS.ui, cfg.ui || {}),
   };
 }
 
@@ -142,6 +154,25 @@ function applyMaskedUpdate(current, incoming) {
   }
 
   if (Number.isFinite(Number(incoming.timeoutMs))) cfg.timeoutMs = Number(incoming.timeoutMs);
+
+  // 游戏面板 UI 偏好(扁平字段,与面板 collectPanelConfig 对齐)
+  if (incoming.ui && typeof incoming.ui === "object") {
+    const u = incoming.ui;
+    if (typeof u.enabled === "boolean") cfg.ui.enabled = u.enabled;
+    if (typeof u.provider === "string" && u.provider) cfg.ui.provider = u.provider;
+    if (typeof u.displayMode === "string" && u.displayMode) cfg.ui.displayMode = u.displayMode;
+    if (typeof u.outgoing === "string" && u.outgoing) cfg.ui.outgoing = u.outgoing;
+    if (typeof u.outgoingTarget === "string" && u.outgoingTarget) cfg.ui.outgoingTarget = u.outgoingTarget;
+    if (typeof u.targetLanguage === "string" && u.targetLanguage) cfg.ui.targetLanguage = u.targetLanguage;
+    if (typeof u.force === "boolean") cfg.ui.force = u.force;
+    if (Number.isFinite(Number(u.timeoutMs))) cfg.ui.timeoutMs = Number(u.timeoutMs);
+  }
+  // 兼容面板旧扁平形态(直接顶层字段)
+  if (typeof incoming.displayMode === "string" && incoming.displayMode) cfg.ui.displayMode = incoming.displayMode;
+  if (typeof incoming.outgoing === "string" && incoming.outgoing) cfg.ui.outgoing = incoming.outgoing;
+  if (typeof incoming.outgoingTarget === "string" && incoming.outgoingTarget) cfg.ui.outgoingTarget = incoming.outgoingTarget;
+  if (typeof incoming.enabled === "boolean") cfg.ui.enabled = incoming.enabled;
+  if (typeof incoming.force === "boolean") cfg.ui.force = incoming.force;
   return cfg;
 }
 
