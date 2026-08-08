@@ -545,15 +545,16 @@
     ensureBridgeEvents();
     // 出站翻译超时计时从此刻(开始处理)算起;排队等待不计入
     if (job.kind === "outgoing") {
-      job._timeout = setTimeout(function () {
+      // Panorama 无标准 setTimeout(8/6 崩溃根因),用 $.Schedule(单位秒);done 有 once 保护,超时与结果谁先到谁生效
+      job._timeout = $.Schedule(OUTGOING_TIMEOUT_MS / 1000, function () {
         job.done(null, null);
-      }, OUTGOING_TIMEOUT_MS);
+      });
     }
     const url = buildBridgeUrl(job);
     setPending(job.id, function (payload) {
       if (job.kind === "outgoing") {
         // 出站翻译:不重试,结果直接回传(失败则发原文)
-        if (job._timeout) clearTimeout(job._timeout);
+        job._timeout = null; // $.Schedule 无法取消,超时回调由 done 的 once 保护兜底
         if (payload && payload.ok && payload.translation) {
           job.done(payload.translation, payload.detectedLanguage || null);
         } else {
@@ -575,7 +576,7 @@
       State.pending = null;
       log("SetURL failed: " + (e && e.message ? e.message : String(e)));
       if (job.kind === "outgoing") {
-        if (job._timeout) clearTimeout(job._timeout);
+        job._timeout = null;
         job.done(null, null);
         finishJob();
       } else if (job.kind === "bridge") {
