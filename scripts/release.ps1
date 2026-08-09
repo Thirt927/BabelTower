@@ -19,7 +19,7 @@
 param(
   [string]$Version = "",
   [switch]$Build,
-  [string]$Csdk12Root = "<GAME_LIB>\steamapps\common\Deadlock\Reduced_CSDK_12",
+  [string]$Csdk12Root = "",
   [switch]$Draft,
   [switch]$WhatIf,
   [switch]$Force
@@ -62,6 +62,7 @@ if ($dirty -and -not $Force) {
 
 # ---------- 构建 ----------
 if ($Build) {
+  if (-not $Csdk12Root) { Fail "使用 -Build 需要指定 -Csdk12Root <CSDK 12 根目录>" }
   if (-not (Test-Path $Csdk12Root)) { Fail "CSDK 根目录不存在: $Csdk12Root" }
   Step "编译 VPK..."
   if ($WhatIf) { Write-Host "  (WhatIf) 运行 build.ps1" }
