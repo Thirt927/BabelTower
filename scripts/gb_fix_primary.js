@@ -1,7 +1,8 @@
 // GameBanana 主文件修复:归档旧文件(010/011),只留 012-beta1 未归档 → 成为主下载
 const puppeteer = require("puppeteer-core");
+const path = require("path");
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
+const PROFILE = path.join(__dirname, "..", "config", "gb_browser_profile");
 const EDIT_URL = "https://gamebanana.com/mods/edit/700107";
 const MOD_URL = "https://gamebanana.com/mods/700107";
 const TARGET = "012"; // 保留未归档的文件标识

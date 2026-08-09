@@ -3,14 +3,14 @@ const fs = require("fs");
 const path = require("path");
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
-const COOKIES_FILE = "<PROJECT_DIR>\\config\\gamebanana_cookies.txt";
+const PROFILE = path.join(__dirname, "..", "config", "gb_browser_profile");
+const COOKIES_FILE = path.join(__dirname, "..", "config", "gamebanana_cookies.txt");
 const MOD_URL = "https://gamebanana.com/mods/700107";
 const EDIT_URL = "https://gamebanana.com/mods/700107/edit";
 
 // 待上传的 zip(自动找 dist 下最新)
 function findZip() {
-  const dist = "<PROJECT_DIR>\\dist";
+  const dist = path.join(__dirname, "..", "dist");
   const files = fs.readdirSync(dist).filter(f => /^BabelTower-.*-win64\.zip$/.test(f));
   if (!files.length) throw new Error("dist 下没有 BabelTower-*-win64.zip");
   files.sort((a, b) => fs.statSync(path.join(dist, b)).mtimeMs - fs.statSync(path.join(dist, a)).mtimeMs);

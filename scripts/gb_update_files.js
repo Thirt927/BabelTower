@@ -9,8 +9,8 @@ const fs = require("fs");
 const path = require("path");
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
-const COOKIES_FILE = "<PROJECT_DIR>\\config\\gamebanana_cookies.txt";
+const PROFILE = path.join(__dirname, "..", "config", "gb_browser_profile");
+const COOKIES_FILE = path.join(__dirname, "..", "config", "gamebanana_cookies.txt");
 const EDIT_URL = "https://gamebanana.com/mods/edit/700107";
 const MOD_URL = "https://gamebanana.com/mods/700107";
 
@@ -37,7 +37,7 @@ async function loadCookies(page) {
 }
 
 const version = process.argv[2] || "0.1.2-beta.1";
-const zipPath = path.join("<PROJECT_DIR>\\dist", `BabelTower-${version}-win64.zip`);
+const zipPath = path.join(__dirname, "..", "dist", `BabelTower-${version}-win64.zip`);
 if (!fs.existsSync(zipPath)) { console.error("ZIP NOT FOUND:", zipPath); process.exit(1); }
 console.log("ZIP:", zipPath, "size:", fs.statSync(zipPath).size);
 

@@ -3,11 +3,12 @@
 // 脚本轮询检测到登录成功后, 自动保存新 cookies 到 config/gamebanana_cookies.txt
 // 用法: node scripts/gb_manual_login.js
 const puppeteer = require("puppeteer-core");
+const path = require("path");
 const fs = require("fs");
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
-const COOKIES_FILE = "<PROJECT_DIR>\\config\\gamebanana_cookies.txt";
+const PROFILE = path.join(__dirname, "..", "config", "gb_browser_profile");
+const COOKIES_FILE = path.join(__dirname, "..", "config", "gamebanana_cookies.txt");
 const LOGIN_URL = "https://gamebanana.com/account/login";
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

@@ -3,11 +3,12 @@
 // publish mode: opens a visible Edge window; if the session is expired, it goes
 // to the login page and waits (up to 10 min) for the user to sign in manually.
 const puppeteer = require("puppeteer-core");
+const path = require("path");
 const fs = require("fs");
 
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const PROFILE = "<PROJECT_DIR>\\config\\gb_browser_profile";
-const COOKIES_FILE = "<PROJECT_DIR>\\config\\gamebanana_cookies.txt";
+const PROFILE = path.join(__dirname, "..", "config", "gb_browser_profile");
+const COOKIES_FILE = path.join(__dirname, "..", "config", "gamebanana_cookies.txt");
 const DESC_TEXTAREA = "bfc5b02d6f8165994dd9f4ec31a1129c";
 const MOD_URL = "https://gamebanana.com/mods/700107";
 const EDIT_URL = "https://gamebanana.com/mods/edit/700107";
