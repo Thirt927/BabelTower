@@ -89,6 +89,7 @@
     outgoingPending: null, // 发送翻译中的文本(去重:同文本重复按 Enter 忽略)
     panel: null, // 隐藏 HTML 桥面板(在 chat.xml 中用 <HTML> 标签声明)
     panelLogged: false,
+    panelDead: false, // BUGFIX 0.1.3:面板导航失败标记,下次强制重新查找
     eventsRegistered: false,
     pending: null, // 统一在途桥请求 { id, onResult, deadline, sawAlive }
     bridgeUp: false,
@@ -508,7 +509,10 @@
   // HTML 桥面板:必须在 chat.xml 里用 <HTML id="LCTBridgePanel"> 声明,
   // 这里只做查找;运行时 $.CreatePanel("HTML",...) 不会得到可用的 HTML 面板。
   function ensurePanel() {
-    if (isValid(State.panel) && typeof State.panel.SetURL === "function") return State.panel;
+    if (!State.panelDead && isValid(State.panel) && typeof State.panel.SetURL === "function") return State.panel;
+    // BUGFIX 0.1.3:面板曾失效(导航失败标记),强制重新查找,避免缓存死面板
+    State.panel = null;
+    State.panelDead = false;
     const root = getRoot();
     if (!root) return null;
     State.panel = findChild(root, BRIDGE_PANEL_ID);
@@ -547,7 +551,14 @@
     if (job.kind === "outgoing") {
       // Panorama 无标准 setTimeout(8/6 崩溃根因),用 $.Schedule(单位秒);done 有 once 保护,超时与结果谁先到谁生效
       job._timeout = $.Schedule(OUTGOING_TIMEOUT_MS / 1000, function () {
+        // BUGFIX 0.1.3:超时必须同时释放队列槽位+清 pending,否则槽位卡到 15s 超时,
+        // 期间所有翻译请求排队堵死 = 用户看到的"发中文卡死,之后全失效"。
+        if (State.pending && State.pending.id === job.id) {
+          State.pending = null;
+          State.polling = false; // pollTitle 下次调度时发现无 pending 自然停止
+        }
         job.done(null, null);
+        finishJob();
       });
     }
     const url = buildBridgeUrl(job);
@@ -611,6 +622,7 @@
       id: id,
       onResult: onResult,
       deadline: nowMs() + (timeoutMs || 15000),
+      startedAt: nowMs(), // BUGFIX 0.1.3:记录发起时刻,用于导航失败快速判定
       sawAlive: false,
     };
     startTitlePolling();
@@ -736,6 +748,17 @@
       } catch (e) {}
       State.pending = null;
       pending.onResult(payload || { ok: false, error: "bad_bridge_payload" });
+      return;
+    }
+    // 导航失败快速判定:BUGFIX 0.1.3
+    // 页面 JS 加载后立即置 document.title='lct-alive',正常 <2s 内必到。
+    // 若 BRIDGE_ALIVE_SECONDS 内连 alive 都没出现 => 面板导航失败(被游戏回收/UI 重建),
+    // 立即失败并标记面板死亡,下次 ensurePanel 重新查找,而不是傻等 15s 超时。
+    if (!pending.sawAlive && nowMs() - pending.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
+      State.pending = null;
+      State.panelDead = true;
+      log("bridge nav failed: panel dead (no lct-alive within " + BRIDGE_ALIVE_SECONDS + "s)");
+      pending.onResult({ ok: false, error: "bridge_nav_failed" });
       return;
     }
     // 超时处理
@@ -1529,9 +1552,46 @@
 
   // ================= 启动 =================
 
+  function syncBridgeConfig(callback) {
+    // BUGFIX 0.1.3:boot 时主动从桥拉取已保存配置,同步进 State.cfg,
+    // 否则游戏重启后 outgoing 等偏好回落到 UI_DEFAULTS(发送前翻译默认关)。
+    // boot 时 UI 树可能尚未构建,面板找不到会立即失败 -> 延迟重试,10s 内最多 5 次。
+    let attempts = 0;
+    const MAX_SYNC_ATTEMPTS = 5;
+    const trySync = function () {
+      attempts += 1;
+      bridgePost("config", {}, function (res) {
+        if (res && res.ok && res.config && res.config.ui) {
+          const c = res.config.ui;
+          let changed = false;
+          if (typeof c.displayMode === "string") { State.cfg.displayMode = c.displayMode; changed = true; }
+          if (typeof c.outgoing === "string") { State.cfg.outgoing = c.outgoing; changed = true; }
+          if (typeof c.outgoingTarget === "string") { State.cfg.outgoingTarget = c.outgoingTarget; changed = true; }
+          if (typeof c.targetLanguage === "string") { State.cfg.targetLanguage = c.targetLanguage; changed = true; }
+          if (typeof c.enabled === "boolean") { State.cfg.enabled = c.enabled; changed = true; }
+          if (typeof c.force === "boolean") { State.cfg.force = c.force; changed = true; }
+          if (typeof c.provider === "string") { State.cfg.provider = c.provider; changed = true; }
+          if (typeof c.timeoutMs === "number") { State.cfg.timeoutMs = c.timeoutMs; changed = true; }
+          if (changed) {
+            saveUiConfig();
+            log("boot: config synced from bridge (outgoing=" + State.cfg.outgoing + ")");
+          }
+          if (callback) callback();
+        } else if (attempts < MAX_SYNC_ATTEMPTS && !State.bridgeUp) {
+          // 面板未就绪/桥未探测到:延迟重试
+          $.Schedule(2.0, trySync);
+        } else {
+          if (callback) callback();
+        }
+      });
+    };
+    trySync();
+  }
+
   function boot() {
     State.cfg = loadUiConfig();
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
+    syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
     $.Schedule(SLOW_POLL_SECONDS, scanChatMessages);
   }
 
