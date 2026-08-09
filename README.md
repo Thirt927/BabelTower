@@ -18,11 +18,25 @@
 - **DeepSeek / OpenAI 兼容专项**:翻译模式提示词(system+user 双重指令,只输出译文)、
   Key 按服务商正确落位、`temperature` 400 自动重试、输出清洗(去引号/括号)
 - **发送前翻译**:超时 20s 并透传桥端(长文本首次发送即出译文)、双语长文本保护
-  (保留原文,译文超 400 字符截断)
+  (保留原文,译文超 400 字符截断)、失败自动重试一次、桥未连接时立即按原文发送
+- **译文蓝色气泡样式**:译文改为浅蓝斜体 + 深色半透明底气泡,普通聊天/HUD 顶栏/
+  翻译失败提示统一风格,深浅背景均可读
+- **桥健康探测 + 状态栏**:每 5 秒探测桥,状态栏显示"桥在线·服务商 X / 桥离线",
+  离线不再静默失败
 - **配置持久化 + Key 防误清空**:面板选项经桥保存,重启不丢;空字段不再误删已保存的 Key
+- **设置面板 UI 优化**:服务商/显示模式等改为下拉菜单、配置行按需显示、
+  面板加宽(660x600)可滚动、新增回退服务商与聊天日志配置
+- **聊天日志(按比赛 ID)**:开启后每局消息写入 `logs/chat/<比赛ID>.jsonl`,
+  含时间/昵称/英雄/SteamID/频道等字段,便于赛后复盘与违规举报
+- **大厅聊天支持**:新增大厅布局覆盖(`hudchat.xml`),大厅聊天也能翻译,
+  设置面板/`译`按钮/发送接管在大厅同样可用
+- **启动行为调整**:`StartDeadlock.bat` 默认只启动翻译桥,连游戏一起启动用 `-game` 参数
+- **启动器与桥进程健壮性**:启动前健康检查防重复启动、端口残留自动清理、启动结果明确提示;
+  桥监视游戏退出需连续 3 次确认(约 6s),不再误杀;桥日志统一落盘 `logs/bridge.log`
 - **游戏兼容修复**:`$.AsyncWebRequest` 被游戏移除后自动回退 HTML 面板通道,翻译不断
 - **内置词典**:2801 条中文常用短句/游戏术语 + 英雄名官方译名/简写,短词零延迟直译
-- **质量保障**:43 项模拟测试(`scripts/lingua_chat_simtest.js`)全过
+- **质量保障**:43 项模拟测试(`scripts/lingua_chat_simtest.js`)全过;
+  完整优化过程见 [OPTIMIZATION_REPORT.md](OPTIMIZATION_REPORT.md)
 ---
 
 ## 目录结构
@@ -31,6 +45,7 @@
 BabelTower/
 ├── mod/panorama/          游戏内 UI 源码(需编译成 VPK 安装)
 │   ├── layout/chat.xml      聊天布局覆盖(含设置面板)
+│   ├── layout/hudchat.xml   大厅聊天布局覆盖(大厅也可翻译)
 │   ├── scripts/lingua_chat.js  主逻辑:扫描/去重/缓存/桥接/设置(内部代号 LCT)
 │   └── styles/lingua_chat.css  译文与设置面板样式
 ├── core/                  本地翻译桥(Node.js,零依赖)
@@ -44,7 +59,7 @@ BabelTower/
 ├── core/hero_names.js       英雄名官方译名 + 前缀/首字母简写(abr→亚伯兰, gt→灰爪 等)
 ├── scripts/build.ps1       编译 + 打包 VPK 脚本
 ├── scripts/autostart.ps1   开机自启安装/卸载
-├── StartDeadlock.bat       手动启动:桥 + 游戏
+├── StartDeadlock.bat       手动启动:默认只启动翻译桥(-game 连游戏一起启动)
 ├── docs/                   架构与开发文档
 └── references/             研究参考材料(原版布局反编译等)
 ```
@@ -84,6 +99,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 设置项:
 
 - **启用翻译**:总开关
+- **翻译自己的消息**:开关(默认开,自己的发言也翻译)
 - **服务商**:下拉选择 `bing(免 Key)` / `microsoft(Azure Key)` / `OpenAI 兼容` / `DeepL` / `Google Cloud`
 - **API Key / 区域 / Base URL / 模型**:按所选服务商显示对应输入(Key 只保存在本地 `config/config.json`,打码显示)
 - **服务商失败自动回退**:填逗号分隔的服务商名(如 `microsoft,openai`),主服务商失败时自动尝试已填 Key 的备用服务商
@@ -96,7 +112,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 
 行为说明:
 
-- 只翻译别人的消息(自己的消息默认跳过)
+- 自己的消息默认也翻译(设置面板“翻译自己的消息”可关闭)
 - 已是目标语言的消息(启发式判断)不重复翻译
 - 纯数字/符号、指令(`/` 开头)不翻译
 - 翻译失败自动重试一次,仍失败显示红字错误
