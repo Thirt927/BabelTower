@@ -38,7 +38,6 @@ config/dictionary.json.bak
 # 本机专用脚本(含绝对路径,不入库)
 scripts/babel_bridge_autostart.vbs
 
-# 本地保留的开发文档与研究参考(不入库)
+# 本地保留的开发文档(不入库)
 OPTIMIZATION_REPORT.md
 docs/development.md
-references/
