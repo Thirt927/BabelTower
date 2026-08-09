@@ -34,3 +34,6 @@ tmp_*/
 tmp_vpk_*.txt
 
 config/dictionary.json.bak
+
+# 本机专用脚本(含绝对路径,不入库)
+scripts/babel_bridge_autostart.vbs

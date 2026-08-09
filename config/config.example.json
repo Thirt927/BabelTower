@@ -15,5 +15,32 @@
   "maxQueue": 200,
   "watchGame": true,
   "watchGameExe": "deadlock.exe",
-  "logFile": ""
+  "logFile": "logs/bridge.log",
+  "openai": {
+    "apiKey": "",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini"
+  },
+  "deepl": {
+    "apiKey": "",
+    "endpoint": "https://api-free.deepl.com/v2/translate"
+  },
+  "google": {
+    "apiKey": ""
+  },
+  "fallbackProviders": [],
+  "chatLog": {
+    "enabled": true,
+    "dir": "logs/chat"
+  },
+  "ui": {
+    "enabled": true,
+    "provider": "bing",
+    "displayMode": "bilingual",
+    "outgoing": "off",
+    "outgoingTarget": "en",
+    "targetLanguage": "zh-Hans",
+    "force": false,
+    "timeoutMs": 15000
+  }
 }

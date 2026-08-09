@@ -9,6 +9,9 @@
 const providers = {
   bing: require("./bing"),
   microsoft: require("./microsoft"),
+  openai: require("./openai"),
+  deepl: require("./deepl"),
+  google: require("./google"),
 };
 
 function getProvider(id) {

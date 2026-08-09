@@ -4,7 +4,7 @@
 也支持"发送前把要说的话翻译成目标语言"(仅译文 / 原文|译文 双语模式)。
 
 - 架构:全景(游戏内 Panorama 界面)+ 本地翻译桥(Node.js 本地服务)+ 翻译服务商
-- 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft Translator(Azure Key)
+- 默认服务商:**Bing Translator(公共免费接口,免 Key,国内直连可用)**;可选 Microsoft(Azure)、OpenAI 兼容(OpenAI/Ollama/LM Studio/OneAPI)、DeepL、Google Cloud;主服务商失败可自动回退到已配置 Key 的其他服务商
 - 原理:聊天行扫描 → 去重/缓存 → 隐藏 HTML 面板桥接本地服务 → 译文追加显示
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
@@ -25,9 +25,11 @@ BabelTower/
 │   ├── bridge_server.js      桥服务器 + 隐藏面板页面
 │   ├── config.js             本地配置管理(apiKey 打码)
 │   ├── dictionary.js         自适应学习词典(短词直译,见下方教程)
-│   └── providers/            Bing(免 Key)/ Microsoft 双服务商
+│   └── providers/            五个服务商:Bing(免 Key)/ Microsoft / OpenAI 兼容 / DeepL / Google
 ├── config/config.example.json  桥配置示例(复制为 config.json 使用)
 ├── config/dictionary.json   词典数据(user 手动 + learned 自动学习)
+├── config/dictionary.builtin.json  内置词典(2801 条中文常用短句/游戏术语,随发行附带)
+├── core/hero_names.js       英雄名官方译名 + 前缀/首字母简写(abr→亚伯兰, gt→灰爪 等)
 ├── scripts/build.ps1       编译 + 打包 VPK 脚本
 ├── scripts/autostart.ps1   开机自启安装/卸载
 ├── StartDeadlock.bat       手动启动:桥 + 游戏
@@ -56,7 +58,8 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 > 若提示找不到脚本,说明当前目录不对:先 `cd` 到项目目录,或用完整路径
 > `powershell -ExecutionPolicy Bypass -File "<你的路径>\scripts\autostart.ps1" -Action Install`
 
-5. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动
+5. (可选)不用自启时,双击 `StartDeadlock.bat` 手动启动(默认只启动翻译桥,不自动启动游戏;
+   需要连游戏一起启动请用 `StartDeadlock.bat -game`)
 
 ## 使用
 
@@ -69,8 +72,10 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 设置项:
 
 - **启用翻译**:总开关
-- **服务商**:`bing(免 Key)` 默认 ⇄ `microsoft(Azure Key)`
-- **API Key / 区域**:仅 Microsoft 需要填写(Key 只保存在本地 `config/config.json`,打码显示)
+- **服务商**:下拉选择 `bing(免 Key)` / `microsoft(Azure Key)` / `OpenAI 兼容` / `DeepL` / `Google Cloud`
+- **API Key / 区域 / Base URL / 模型**:按所选服务商显示对应输入(Key 只保存在本地 `config/config.json`,打码显示)
+- **服务商失败自动回退**:填逗号分隔的服务商名(如 `microsoft,openai`),主服务商失败时自动尝试已填 Key 的备用服务商
+- **聊天日志**:开关按比赛 ID 记录聊天到本地 `logs/chat/`(见下文)
 - **目标语言**:下拉选择(简中/繁中/英/日/韩/法/德/西 + 自定义)
 - **显示模式**:双语(原文+译文)⇄ 仅译文
 - **发送前翻译**:关(发原文)⇄ 仅译文 ⇄ 双语(原文 | 译文)
@@ -85,10 +90,23 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 - 翻译失败自动重试一次,仍失败显示红字错误
 - 聊天滚动/回收后,译文会从缓存自动重建
 
-## 翻译词典(自适应学习)
+## 翻译词典(自适应学习 + 内置词典)
 
 词典用于**稳定短句/游戏术语的翻译**:命中词典的词条直接查表返回(毫秒级),
 不走翻译服务商,避免 Bing 对短词(如 `gg`、`mid`)翻译结果抖动的问题。
+
+### 内置词典(开箱即用)
+
+项目随发行附带 `config/dictionary.builtin.json`,内置 **2801 条**中文常用短句/游戏术语
+(Deadlock 官方英雄/道具译名、MOBA/FPS 交流用语、玩家礼貌用语等),无需配置即可命中:
+
+- 游戏术语秒翻:`glhf`→祝好运玩得开心、`go next`→下一把、`first blood`→一血、`team diff`→队友差距
+- 英雄名支持**前缀/首字母简写**(来自 `core/hero_names.js`,47 名英雄官方译名):
+  - `abr`→亚伯兰、`sev`→七、`wra`→灵魅、`haz`→岚梦、`dyn`→奇能
+  - 多词英雄首字母:`gt`→灰爪(Grey Talon)、`lg`→盖斯特夫人(Lady Geist)、`mk`→莫克双雄(Mo & Krill)
+  - 可组合使用:`abr mid`→亚伯兰 中路、`go gt bot`→去 灰爪 下路
+- 内置词典只在"每个词都能查表且至少含一个英雄简写"时才整句组合,不会抢走在线翻译的活
+- 查表顺序:**user 手动区 > 内置词典 > learned 学习区**
 
 ### 自动学习(无需手动操作)
 
@@ -146,12 +164,46 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 2. 设置面板:服务商切到 `microsoft`,填入 Key(区域按需)
 3. 点**测试**验证
 
+### 可选:OpenAI 兼容接口(OpenAI / Ollama / LM Studio / OneAPI 等)
+
+- 设置面板服务商选 `OpenAI 兼容`,填入:
+  - **API Key**:OpenAI Key,或 Ollama/LM Studio 等本地服务的任意占位值(如 `ollama`)
+  - **Base URL**:默认 `https://api.openai.com/v1`;本地服务填如 `http://127.0.0.1:11434/v1`
+  - **模型名**:如 `gpt-4o-mini`、`llama3`、`qwen2.5` 等(按服务商支持的模型)
+- 也可直接在 `config/config.json` 的 `openai` 段配置
+
+### 可选:DeepL
+
+- 设置面板服务商选 `DeepL`,填入 API Key;免费端点 `https://api-free.deepl.com/v2/translate`,
+  专业版换 `https://api.deepl.com/v2/translate`
+
+### 可选:Google Cloud Translation
+
+- 设置面板服务商选 `Google Cloud`,填入 API Key(需启用 Cloud Translation API)
+
+### 服务商失败自动回退
+
+主服务商不稳定/限流时,可在设置面板的"服务商失败自动回退"输入逗号分隔的备用服务商
+(如 `microsoft,openai`),桥会自动尝试**已填 Key** 的备用服务商(免 Key 的 bing 也可作为备用)。
+不填则失败直接返回错误。
+
+## 聊天日志(按比赛 ID 划分)
+
+- 开启后,每局聊天的消息会写入 `logs/chat/<比赛ID>.jsonl`(JSON Lines 格式),一局一个文件
+- 每条记录包含:时间、发送人昵称、英雄、英雄 ID、SteamID、频道、是否自己、消息原文
+- 字段获取:优先读聊天行面板属性;读不到时按昵称匹配 `Players.GetPlayerInfo` 尽力补全
+  英雄/SteamID(仍可能为空,取决于游戏 API 是否提供)
+- 日志去重:HUD 顶栏与左下聊天是同一消息的重复展示,只记一次;未填充完整的不完整行
+  不会落盘(字段就绪后由低延迟尾扫重新采集)
+- 可用 `logs/chat/` 下的 JSONL 文件做赛后复盘/违规举报素材
+- 关闭:设置面板"聊天日志"开关,或 `config/config.json` 里 `chatLog.enabled=false`
+
 ## 更新规划(Roadmap)
 
 > 以下为计划中的方向,尚未实现,具体以发布为准。
 
-- **更多翻译接口**:Google / DeepL / OpenAI 兼容接口,主服务商失败时自动回退
-- **翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默
+- ~~**更多翻译接口**:Google / DeepL / OpenAI 兼容接口,主服务商失败时自动回退~~(v0.2 已实现)
+- ~~**翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默~~(v0.2 已实现)
 - **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
 - **游戏术语表**:预置 Deadlock 常用术语翻译(push/ult/lane 等),其他语言自动学习积累
 - **Linux 移植**:支持 Steam Deck / Proton 环境

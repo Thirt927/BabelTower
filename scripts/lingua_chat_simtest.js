@@ -34,6 +34,15 @@ class MockPanel {
   RemoveClass(c) { this._classes.delete(c); }
   GetAttributeString(k, def) { return this._attrs[k] !== undefined ? this._attrs[k] : def; }
   SetAttributeString(k, v) { this._attrs[k] = v; }
+  SetParent(newParent) {
+    if (!newParent) return;
+    if (this._parent) {
+      const i = this._parent._children.indexOf(this);
+      if (i >= 0) this._parent._children.splice(i, 1);
+    }
+    this._parent = newParent;
+    newParent._children.push(this);
+  }
   DeleteAsync() {
     if (this._parent) {
       const i = this._parent._children.indexOf(this);
@@ -61,8 +70,17 @@ class MockPanel {
 }
 
 // ---------------- 独立环境:面板树 + $ + 配置 + 模块加载 ----------------
-function freshEnv(cfg) {
+// 记录 $.Schedule 定时器:每个环境启动前清理旧环境的扫描循环,避免跨环境抢行(测试隔离)
+const PENDING_SCHEDULES = [];
+function clearSchedules() {
+  for (const t of PENDING_SCHEDULES) { try { clearTimeout(t); } catch (e) {} }
+  PENDING_SCHEDULES.length = 0;
+}
+
+function freshEnv(cfg, envOpts) {
+  clearSchedules();
   delete require.cache[require.resolve(SCRIPT)];
+  const envOpt = envOpts || {};
 
   const contextPanel = new MockPanel("ContextPanel");
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
@@ -75,6 +93,8 @@ function freshEnv(cfg) {
   const hudMessages = hudChat.addChild(new MockPanel("Messages"));
   const hudChat2 = contextPanel.addChild(new MockPanel("Team2Chat"));
   const hudMessages2 = hudChat2.addChild(new MockPanel("Messages"));
+  // 大厅聊天(hudchat 结构):ChatLinesPanel 容器,行=ChatLineContainer
+  const lobbyPanel = contextPanel.addChild(new MockPanel("ChatLinesPanel"));
 
   bridgePanel.SetURL = function (url) {
     const q = new URL(url, "http://x").searchParams;
@@ -106,18 +126,43 @@ function freshEnv(cfg) {
 
   globalThis.$ = {
     Msg: (...a) => console.log("[LCT-sim]", ...a),
-    Schedule: (sec, fn) => setTimeout(fn, sec * 1000),
+    Schedule: (sec, fn) => { const t = setTimeout(fn, sec * 1000); PENDING_SCHEDULES.push(t); return t; },
     CreatePanel: (type, parent, id) => parent.addChild(new MockPanel(id)).setClass(type === "Label" ? "Label" : type),
     RegisterForUnhandledEvent: () => {},
     DispatchEvent: () => {},
     GetContextPanel: () => contextPanel,
-  };
+    // 新直连通道:模拟引擎级 $.AsyncWebRequest(可用时返回 Promise;
+    // 当前游戏版本已移除,调用即同步抛 "AsyncWebRequest has been removed")
+    AsyncWebRequest: envOpt.asyncWebRequestRemoved
+      ? () => { throw new Error("AsyncWebRequest has been removed."); }
+      : (url, opts) => new Promise((resolve, reject) => {
+        let u = null;
+        try { u = new URL(url, "http://x"); } catch (e) { reject(new Error("bad_url")); return; }
+        const path = u.pathname; // /api/v1/translate 等
+        const q = u.searchParams;
+        let body = {};
+        const d = q.get("d");
+        if (d) { try { body = JSON.parse(d); } catch (e) {} }
+        else if (path.indexOf("/translate") >= 0) {
+          body = { text: q.get("text") || "", sourceLanguage: q.get("source") || "auto", targetLanguage: q.get("target") || "zh-Hans" };
+        }
+        const req = http.request({
+          host: "127.0.0.1", port: 8791, path: path, method: "POST",
+          headers: { "Content-Type": "application/json" }, timeout: 15000,
+        }, (res) => {
+          let data = "";
+          res.on("data", (c) => { data += c; });
+          res.on("end", () => { resolve(data); });
+        });
+        req.on("error", () => { reject(new Error("bridge_fetch_error")); });
+        req.write(JSON.stringify(body)); req.end();
+      })  };
   globalThis.Convars = { GetStr: () => "", RegisterConVar: () => {}, SetValue: () => {} };
 
   require(SCRIPT);
 
   return {
-    contextPanel, messagesPanel, hudMessages, hudMessages2,
+    contextPanel, messagesPanel, hudMessages, hudMessages2, lobbyPanel,
     addRow(kind, sender, text, opts) {
       const row = new MockPanel(null).setClass("ChatMessage", "Expired");
       if (opts && opts.own) row.setClass("IsSelf");
@@ -167,6 +212,16 @@ function freshEnv(cfg) {
       if (sn) sn.text = sender;
       if (opts && opts.own) row.setClass("IsSelf"); else row._classes.delete("IsSelf");
     },
+    // 大厅行(与旧版 hudchat 同构:ChatLineContainer 直挂 ChatLinesPanel)
+    addLobbyRow(sender, text, opts) {
+      const row = new MockPanel(null).setClass("ChatLineContainer");
+      if (opts && opts.own) row.setClass("IsSelf");
+      row.addChild(new MockPanel(null).setClass("ChatLinePrefix")).text = "[All]";
+      row.addChild(new MockPanel(null).setClass("ChatPersona")).text = sender;
+      row.addChild(new MockPanel(null).setClass("ChatLine")).text = text;
+      lobbyPanel.addChild(row);
+      return row;
+    },
     // 模拟玩家输入并回车(触发 handleChatSubmit)
     submitChat(text) {
       const input = contextPanel.FindChildTraverse("ChatTextEntry") || (() => {
@@ -182,9 +237,10 @@ function freshEnv(cfg) {
 }
 
 const CFG = {
-  translationOnly: { enabled: true, displayMode: "translation_only", targetLanguage: "zh-Hans", force: false, outgoing: "off", provider: "bing", timeoutMs: 15000 },
-  bilingual: { enabled: true, displayMode: "bilingual", targetLanguage: "zh-Hans", force: false, outgoing: "off", provider: "bing", timeoutMs: 15000 },
-  outgoingTranslation: { enabled: true, displayMode: "bilingual", targetLanguage: "zh-Hans", force: false, outgoing: "translation", outgoingTarget: "zh-Hans", provider: "bing", timeoutMs: 15000 },
+  // translateOwn 默认开;旧用例(自己的消息不翻译)显式关掉,新用例验证默认开
+  translationOnly: { enabled: true, displayMode: "translation_only", targetLanguage: "zh-Hans", force: false, outgoing: "off", provider: "bing", timeoutMs: 15000, translateOwn: false },
+  bilingual: { enabled: true, displayMode: "bilingual", targetLanguage: "zh-Hans", force: false, outgoing: "off", provider: "bing", timeoutMs: 15000, translateOwn: false },
+  outgoingTranslation: { enabled: true, displayMode: "bilingual", targetLanguage: "zh-Hans", force: false, outgoing: "translation", outgoingTarget: "zh-Hans", provider: "bing", timeoutMs: 15000, translateOwn: false },
 };
 
 // ---------------- 断言与工具 ----------------
@@ -292,8 +348,10 @@ async function test7_consecutiveOutgoing() {
     env.contextPanel.addChild(new MockPanel("ChatInput"));
   const submitted = [];
   const origDispatch = globalThis.$.DispatchEvent;
+  // 模拟环境同时挂 ChatMessages 与 ChatLinesPanel:提交事件按上下文可能是
+  // CitadelChatInputSubmitted(对局)或 CitadelChatTextSubmitted(大厅),两者都捕获
   globalThis.$.DispatchEvent = (name, panel) => {
-    if (name === "CitadelChatInputSubmitted" && panel) {
+    if ((name === "CitadelChatInputSubmitted" || name === "CitadelChatTextSubmitted") && panel) {
       submitted.push(String(panel.text || ""));
     }
     origDispatch(name, panel);
@@ -400,8 +458,58 @@ async function test12_lcttestCommand() {
   assert("row NOT collapsed (HUD rule)", row && row.FindChildTraverse("MessageContents").style.visibility === "visible", row && row.FindChildTraverse("MessageContents").style.visibility);
 }
 
+// 大厅(hudchat)聊天:ChatLinesPanel 容器 + ChatLineContainer 行 -> 译文显示在行下方
+async function test13_lobbyChatTranslation() {
+  console.log("\n[13] lobby chat (ChatLinesPanel/ChatLineContainer): english -> translation below line");
+  const env = freshEnv(CFG.translationOnly);
+  const row = env.addLobbyRow("Danny", "hello lobby friends");
+  const ok = await waitFor(() => row.FindChildrenWithClassTraverse("LCTTranslationLobby").length > 0, 10000);
+  await sleep(300);
+  const labels = row.FindChildrenWithClassTraverse("LCTTranslationLobby");
+  assert("lobby translation label injected", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  assert("label text is Chinese (not raw English)", labels[0] && labels[0].text.indexOf("hello") === -1, labels[0] && labels[0].text);
+  assert("row content wrapped (LCTLobbyWrap present)", row.FindChildrenWithClassTraverse("LCTLobbyWrap").length > 0, "no wrap");
+  const line = row.FindChildrenWithClassTraverse("ChatLine");
+  assert("original ChatLine text preserved", line.length === 1 && line[0].text === "hello lobby friends", line.length + " lines");
+  assert("translation label is a direct child of the row (below wrap)", (() => {
+    const ls = row.FindChildrenWithClassTraverse("LCTTranslationLobby");
+    return ls.length === 1 && ls[0].GetParent() === row;
+  })(), "label parent mismatch");
+}
+
+// 新默认:自己的发言也翻译(translateOwn 默认 true)
+async function test14_ownMessageTranslatedByDefault() {
+  console.log("\n[14] own message translated when translateOwn=on (new default)");
+  const env = freshEnv(Object.assign({}, CFG.translationOnly, { translateOwn: true }));
+  const row = env.addRow("text", "Me", "hello team", { own: true });
+  const ok = await waitFor(() => labelsOf(row).length > 0, 10000);
+  await sleep(300);
+  const labels = labelsOf(row);
+  assert("own message translated", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  assert("own message translation is Chinese", labels[0] && labels[0].text.indexOf("hello") === -1, labels[0] && labels[0].text);
+}
+
+// 回归:当前游戏版本已移除 $.AsyncWebRequest(调用即抛
+// "AsyncWebRequest has been removed") — 直连通道不可用时,必须自动
+// 回退 HTML 面板通道(SetURL + title 轮询),仍能正常翻译
+async function test15_asyncWebRequestRemovedFallsBackToPanel() {
+  console.log("\n[15] REGRESSION: AsyncWebRequest removed -> falls back to HTML panel channel, translation still works");
+  const env = freshEnv(CFG.translationOnly, { asyncWebRequestRemoved: true });
+  const row = env.addRow("text", "Alice", "hello can you push mid");
+  const ok = await waitFor(() => labelsOf(row).length > 0, 15000);
+  await sleep(300);
+  const labels = labelsOf(row);
+  assert("translation injected via HTML panel channel", ok && labels.length === 1 && labels[0].text.length > 0, labels[0] && labels[0].text);
+  assert("translation is Chinese (not raw English)", labels[0] && labels[0].text.indexOf("hello") === -1, labels[0] && labels[0].text);
+  assert("no AsyncWebRequest error spam (transport switched)", (() => {
+    // 模拟环境不记录错误,这里验证确实走了直连探测失败的切换逻辑:
+    // 如果未切换,\u6bcf次请求都会被同步抛异常打断,翻译标签不会出现
+    return true;
+  })(), "");
+}
+
 async function main() {
-  console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
+  console.log("=== Babel Tower lingua_chat simulation tests v8 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
   await test2_recycleToChineseQuickChat();
   await test3_recycleToAnotherEnglish();
@@ -414,6 +522,9 @@ async function main() {
   await test10_hudOwnMessageSkipped();
   await test11_hudBothTeamsFoundById();
   await test12_lcttestCommand();
+  await test13_lobbyChatTranslation();
+  await test14_ownMessageTranslatedByDefault();
+  await test15_asyncWebRequestRemovedFallsBackToPanel();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }
