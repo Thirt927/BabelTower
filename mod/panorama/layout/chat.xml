@@ -4,7 +4,7 @@
   本文件以原版 panorama/layout/chat.xml 的反编译重建结构为基础(Valve 素材,
   保留原结构以保证聊天功能与引擎数据绑定正常),额外加入 LinguaChat 的
   样式/脚本引用、设置按钮与设置面板。所有原版 ID / class / 属性保持不变。
-  原版结构参考: references/poker_chat.xml(同源重建,Apache-2.0 仓库)
+  原版结构参考: Hantu-Raya/Deadlock-mods-collection 的 poker_chat.xml(同源重建,Apache-2.0 仓库)
   注意:Panorama 的 Button 不渲染 text 属性,按钮文字必须用内嵌 <Label>。
 -->
 <root>

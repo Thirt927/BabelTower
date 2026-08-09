@@ -22,7 +22,7 @@ snippet,以及 ChatLinesArea / ChatMessages / ChatControls / ChatInput 等 ID �
 ### Hantu-Raya/Deadlock-mods-collection(Apache-2.0)
 
 - 提供了原版 `chat.xml` 的 Source 2 Viewer 重建参考
-  (`references/poker_chat.xml`,研究参考用途)
+  (研究参考用途)
 - `poker_chat_debug.js` 展示了 Panorama 轮询扫描 ChatMessages、
   `$.DispatchEvent("CitadelChatInputSubmitted", ...)` 触发原版发送等
   **公开 API 用法模式**(API 用法本身不属于可版权表达)

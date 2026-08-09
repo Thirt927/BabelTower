@@ -9,7 +9,7 @@
 - 许可证:**GNU GPL v3**,见 [LICENSE](LICENSE)
 
 > 状态:核心(本地桥)与游戏内界面均已实测可用;游戏内部分依赖 Valve 反编译结构与
-> 已验证的 API 模式,详见 [docs/development.md](docs/development.md)。
+> 已验证的 API 模式,详见 [docs/architecture.md](docs/architecture.md)。
 
 ## 本 Fork 优化亮点(相对上游)
 
@@ -35,8 +35,7 @@
   桥监视游戏退出需连续 3 次确认(约 6s),不再误杀;桥日志统一落盘 `logs/bridge.log`
 - **游戏兼容修复**:`$.AsyncWebRequest` 被游戏移除后自动回退 HTML 面板通道,翻译不断
 - **内置词典**:2801 条中文常用短句/游戏术语 + 英雄名官方译名/简写,短词零延迟直译
-- **质量保障**:43 项模拟测试(`scripts/lingua_chat_simtest.js`)全过;
-  完整优化过程见 [OPTIMIZATION_REPORT.md](OPTIMIZATION_REPORT.md)
+- **质量保障**:43 项模拟测试(`scripts/lingua_chat_simtest.js`)全过
 ---
 
 ## 目录结构
@@ -60,8 +59,7 @@ BabelTower/
 ├── scripts/build.ps1       编译 + 打包 VPK 脚本
 ├── scripts/autostart.ps1   开机自启安装/卸载
 ├── StartDeadlock.bat       手动启动:默认只启动翻译桥(-game 连游戏一起启动)
-├── docs/                   架构与开发文档
-└── references/             研究参考材料(原版布局反编译等)
+└── docs/                   架构文档
 ```
 
 > 说明:项目对外品牌名为 **Babel Tower**;内部功能标识符沿用 LCT/lingua_chat 代号
@@ -264,7 +262,7 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 | Bing 接口报错 | 公共接口偶发不稳,自动重试;长期不行切 Microsoft |
 | 401/403(用 Microsoft 时) | Key 错误;403 检查是否需填区域 |
 | 完全不翻译 | 检查"启用翻译"、目标语言;确认桥日志有请求进来 |
-| 聊天发不出去 | 见 docs/development.md 的回退方案 |
+| 聊天发不出去 | 见 docs/architecture.md「消息流(发)」的发送接管说明 |
 
 ## 许可证与致谢
 
@@ -273,12 +271,3 @@ curl.exe -X POST http://127.0.0.1:8791/api/v1/translate -H "Content-Type: applic
 - 技术路线参考:RogueCore Chat Translator(UE4SS 思路)、
   Hantu-Raya/Deadlock-mods-collection(Apache-2.0,提供了原版 chat.xml 反编译与
   Panorama 轮询模式参考)、plainheart/bing-translate-api(公共接口协议参考)
-
-## AI 辅助开发声明
-
-本项目在开发过程中使用了 AI 编程助手(OpenClaw)辅助完成以下工作:
-- 代码编写与调试,以及聊天行回收、串行队列等缺陷的定位与修复
-- 模拟测试框架(lingua_chat_simtest.js)的编写,用于在无真人队友的环境下回归验证翻译功能
-- 构建/发布脚本的编写与维护
-
-所有代码均由作者审查并测试后发布;作者对项目的功能、质量与合规性负全责。
