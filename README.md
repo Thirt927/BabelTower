@@ -35,7 +35,7 @@
   桥监视游戏退出需连续 3 次确认(约 6s),不再误杀;桥日志统一落盘 `logs/bridge.log`
 - **游戏兼容修复**:`$.AsyncWebRequest` 被游戏移除后自动回退 HTML 面板通道,翻译不断
 - **内置词典**:2801 条中文常用短句/游戏术语 + 英雄名官方译名/简写,短词零延迟直译
-- **质量保障**:43 项模拟测试(`scripts/lingua_chat_simtest.js`)全过
+- **质量保障**:45 项模拟测试(`scripts/lingua_chat_simtest.js`)全过
 ---
 
 ## 目录结构

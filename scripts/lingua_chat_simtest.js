@@ -6,6 +6,10 @@
 const http = require("http");
 const path = require("path");
 
+// node 原生 setTimeout 引用:mock 基础设施必须用它,不查全局
+// (test16 会摘掉全局 setTimeout 模拟 Panorama 环境,若 mock 依赖全局会被误炸)
+const nativeSetTimeout = setTimeout;
+
 const SCRIPT = path.join(__dirname, "..", "mod", "panorama", "scripts", "lingua_chat.js");
 
 // ---------------- Mock 面板 ----------------
@@ -102,7 +106,7 @@ function freshEnv(cfg, envOpts) {
     const text = q.get("text") || "";
     const source = q.get("source") || "auto";
     const target = q.get("target") || "zh-Hans";
-    setTimeout(() => {
+    nativeSetTimeout(() => {
       if (bridgePanel._deleted) return;
       const body = JSON.stringify({ text, sourceLanguage: source, targetLanguage: target });
       const req = http.request({
@@ -126,7 +130,7 @@ function freshEnv(cfg, envOpts) {
 
   globalThis.$ = {
     Msg: (...a) => console.log("[LCT-sim]", ...a),
-    Schedule: (sec, fn) => { const t = setTimeout(fn, sec * 1000); PENDING_SCHEDULES.push(t); return t; },
+    Schedule: (sec, fn) => { const t = nativeSetTimeout(fn, sec * 1000); PENDING_SCHEDULES.push(t); return t; },
     CreatePanel: (type, parent, id) => parent.addChild(new MockPanel(id)).setClass(type === "Label" ? "Label" : type),
     RegisterForUnhandledEvent: () => {},
     DispatchEvent: () => {},
@@ -257,7 +261,7 @@ function labelsOf(row) {
   const body = bodyOf(row);
   return body ? body._children.filter((c) => c.BHasClass("LCTTranslation")) : [];
 }
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+function sleep(ms) { return new Promise((r) => nativeSetTimeout(r, ms)); }
 async function waitFor(cond, timeoutMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -508,6 +512,42 @@ async function test15_asyncWebRequestRemovedFallsBackToPanel() {
   })(), "");
 }
 
+// 回归:8/6 崩溃现场——Panorama 无全局 setTimeout(修复前 dispatchJob 裸调 setTimeout 同步抛 ReferenceError)
+// 修复后走 $.Schedule,不碰全局 setTimeout,必须正常完成出站翻译
+async function test16_outgoingWithoutGlobalSetTimeout() {
+  console.log("\n[16] REGRESSION (8/6 crash): outgoing translate works WITHOUT global setTimeout");
+  const env = freshEnv(CFG.outgoingTranslation);
+  const input = env.contextPanel.FindChildTraverse("ChatInput") ||
+    env.contextPanel.addChild(new MockPanel("ChatInput"));
+  const submitted = [];
+  const origDispatch = globalThis.$.DispatchEvent;
+  globalThis.$.DispatchEvent = (name, panel) => {
+    if ((name === "CitadelChatInputSubmitted" || name === "CitadelChatTextSubmitted") && panel) submitted.push(String(panel.text || ""));
+    origDispatch(name, panel);
+  };
+
+  // 模拟真实 Panorama:摘掉全局 setTimeout,只留 $.Schedule(与 8/6 崩溃环境一致)
+  const saved = globalThis.setTimeout;
+  delete globalThis.setTimeout;
+  let threw = null;
+  try {
+    input.text = "hello no settimeout test";
+    globalThis.LCTOnChatSubmit();
+  } catch (e) {
+    threw = e;
+  } finally {
+    globalThis.setTimeout = saved;
+  }
+
+  assert("no ReferenceError: setTimeout is not defined", threw === null, threw && threw.message);
+  if (threw) { globalThis.$.DispatchEvent = origDispatch; return; }
+
+  // 等消息提交:桥正常则译文,桥慢/失败则超时兜底发原文(两者都算通过)
+  const ok = await waitFor(() => submitted.length >= 1, 15000);
+  const chinese = submitted.filter((s) => /[\u4e00-\u9fff]/.test(s));
+  assert("message eventually submitted (translated or fallback)", ok && submitted.length >= 1, JSON.stringify(submitted));
+}
+
 async function main() {
   console.log("=== Babel Tower lingua_chat simulation tests v8 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
@@ -525,6 +565,7 @@ async function main() {
   await test13_lobbyChatTranslation();
   await test14_ownMessageTranslatedByDefault();
   await test15_asyncWebRequestRemovedFallsBackToPanel();
+  await test16_outgoingWithoutGlobalSetTimeout();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }
