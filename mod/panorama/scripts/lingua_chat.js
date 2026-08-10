@@ -14,7 +14,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "0.1.2";
+  const VERSION = "0.1.3";;
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
