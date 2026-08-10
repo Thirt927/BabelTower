@@ -21,6 +21,20 @@ $Root = Split-Path -Parent $PSScriptRoot
 $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $ValueName = "BabelTowerBridge"
 $VbsPath = Join-Path $Root "scripts\babel_bridge_autostart.vbs"
+# 启动项"禁用标记"位置:任务管理器/联想电脑管家等"禁用开机启动"时在这里写禁用标记,
+# 即使 Run 键值还在,系统也会跳过 → 脚本只写回 Run 键会"设置不回去"。
+$ApprovedKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+
+# 清除禁用标记(删除 = 恢复默认启用;不存在的项系统按启用处理)
+function Clear-ApprovedFlag {
+  if (Test-Path $ApprovedKey) {
+    $p = Get-ItemProperty -Path $ApprovedKey -Name $ValueName -ErrorAction SilentlyContinue
+    if ($p) {
+      Remove-ItemProperty -Path $ApprovedKey -Name $ValueName -ErrorAction SilentlyContinue
+      Write-Host "已清除开机自启禁用标记(StartupApproved)。"
+    }
+  }
+}
 
 if ($Action -eq "Install") {
   $Node = Join-Path $Root "portable-node\node.exe"
@@ -36,6 +50,10 @@ if ($Action -eq "Install") {
 
   # 注册到 HKCU Run(wscript 静默执行 vbs)
   Set-ItemProperty -Path $RunKey -Name $ValueName -Value ('"' + (Join-Path $env:WINDIR "System32\wscript.exe") + '" "' + $VbsPath + '"')
+  # 关键:清掉安全软件/任务管理器写入的"禁用标记"(联想电脑管家等禁用启动项后,
+  # Run 键值仍在但 StartupApproved 标记禁用 → 开机不启动,且脚本重装"设置不回去")
+  Clear-ApprovedFlag
+  $installed = (Get-ItemProperty -Path $RunKey -Name $ValueName).$ValueName
   $installed = (Get-ItemProperty -Path $RunKey -Name $ValueName).$ValueName
   Write-Host "已注册开机自启(Run 键): $installed"
   Write-Host "vbs 位置: $VbsPath"
@@ -49,6 +67,14 @@ if ($Action -eq "Install") {
     $p = Get-ItemProperty -Path $RunKey -Name $ValueName -ErrorAction SilentlyContinue
     if ($p) {
       Remove-ItemProperty -Path $RunKey -Name $ValueName -ErrorAction SilentlyContinue
+      $removed = $true
+    }
+  }
+  # 卸载时也清掉禁用标记,保持环境干净
+  if (Test-Path $ApprovedKey) {
+    $p = Get-ItemProperty -Path $ApprovedKey -Name $ValueName -ErrorAction SilentlyContinue
+    if ($p) {
+      Remove-ItemProperty -Path $ApprovedKey -Name $ValueName -ErrorAction SilentlyContinue
       $removed = $true
     }
   }
