@@ -1404,19 +1404,23 @@
     closeSettingsPanel();
   }
 
-  // TextEntry 失焦恢复:释放输入焦点 + 触发引擎键盘恢复
-  // 修复 Deadlock FPS 引擎对 TextEntry 焦点隐藏鼠标的问题
+  // TextEntry 失焦恢复:释放输入焦点 + 走原版 ChatInput 路径退出引擎文本输入模式
+  // 修复 Deadlock FPS 引擎对 TextEntry 焦点隐藏鼠标/锁键盘的问题
   // 关键(从原版聊天发送链路 poker_chat_debug.js 确认):
-  //   $.DispatchEvent("CitadelChatInputBlur", input);  ← 引擎注册的事件, 不是 JS 函数!
-  //   $.DispatchEvent("DropInputFocus", input);
-  // V2 的 typeof CitadelChatInputBlur === "function" 是死代码, 从不触发 → 键盘一直不恢复
+  //   引擎的键盘模式由 CitadelChat 面板体系(ChatInput)控制。
+  //   发送后恢复 = $.DispatchEvent("CitadelChatInputBlur", ChatInput) + DropInputFocus(ChatInput)
+  // V4 失败原因:把 CitadelChatInputBlur 派发到了我们自己的 entry(非 ChatInput) → 引擎不认识,静默忽略
   // entry 由 XML onblur="LCTEntryBlur(this)" 显式传入 = 触发事件的 TextEntry 面板
   function LCTEntryBlur(entry) {
-    const target = entry || null;
-    if (target) {
-      // 顺序与原版发送后恢复一致: 先 Blur 事件(引擎恢复键盘), 再 DropInputFocus(释放输入焦点)
-      try { $.DispatchEvent("CitadelChatInputBlur", target); } catch (e) {}
-      try { $.DispatchEvent("DropInputFocus", target); } catch (e) {}
+    // 1) 释放我们 TextEntry 的输入焦点 → 鼠标恢复
+    if (entry) {
+      try { $.DispatchEvent("DropInputFocus", entry); } catch (e) {}
+    }
+    // 2) 走原版 ChatInput 失焦路径:对原版 ChatInput 面板派发引擎事件 → 键盘回游戏
+    const chatInput = State.input || findChild(getRoot(), CHAT_INPUT_ID);
+    if (chatInput) {
+      try { $.DispatchEvent("CitadelChatInputBlur", chatInput); } catch (e) {}
+      try { $.DispatchEvent("DropInputFocus", chatInput); } catch (e) {}
     }
     // 注意: 不要 SetFocus 到 settings panel —— 那会把键盘焦点留在 UI, 游戏收不到按键
   }

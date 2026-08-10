@@ -492,29 +492,34 @@ async function test15_bridgeUpDotGreen() {
 }
 
 async function test16_entryBlurDropsFocusOnEntryItself() {
-  console.log("[16] TextEntry blur => CitadelChatInputBlur + DropInputFocus target the entry itself");
+  console.log("[16] TextEntry blur => entry DropInputFocus + stock ChatInput blur path (engine keyboard restore)");
   const env = freshEnv(CFG.bilingual);
   const entry = env.settingsPanel.FindChildTraverse("LCTApiKey");
+  const chatInput = env.contextPanel.FindChildTraverse("ChatInput");
   assert("LCTApiKey entry exists", !!entry);
+  assert("stock ChatInput exists in tree", !!chatInput);
   env.setFocusedPanel(entry); // 模拟点击输入框后焦点在 TextEntry 上
   env.dispatchLog.length = 0;
   globalThis.LCTEntryBlur(entry);
   const blurEvt = env.dispatchLog.filter((d) => d.name === "CitadelChatInputBlur");
   const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
   assert("CitadelChatInputBlur dispatched (engine keyboard restore)", blurEvt.length >= 1, "count=" + blurEvt.length);
-  assert("CitadelChatInputBlur target is the entry", blurEvt.length >= 1 && blurEvt[0].target === entry,
+  assert("CitadelChatInputBlur targets stock ChatInput (not our entry)",
+    blurEvt.length >= 1 && blurEvt[0].target === chatInput,
     blurEvt.length ? (blurEvt[0].target && blurEvt[0].target._id) : "none");
-  assert("DropInputFocus dispatched", drops.length >= 1, "count=" + drops.length);
-  assert("DropInputFocus target is the entry itself", drops.length >= 1 && drops[0].target === entry,
-    drops.length ? (drops[0].target && drops[0].target._id) : "none");
+  assert("DropInputFocus dispatched for our entry", drops.length >= 1 && drops.some((d) => d.target === entry),
+    "count=" + drops.length);
+  assert("DropInputFocus dispatched for stock ChatInput", drops.some((d) => d.target === chatInput),
+    "count=" + drops.length);
   assert("no SetFocus to settings panel (keyboard must return to game)",
     !env.settingsPanel._focused, "panel focused=" + env.settingsPanel._focused);
 }
 
 async function test17_entryEscReleasesFocusThenClosesPanel() {
-  console.log("\n[17] ESC in TextEntry => CitadelChatInputBlur+DropInputFocus first, then close panel, no root.SetFocus");
+  console.log("\n[17] ESC in TextEntry => stock ChatInput blur path, close panel, no root.SetFocus");
   const env = freshEnv(CFG.bilingual);
   const entry = env.settingsPanel.FindChildTraverse("LCTTimeout");
+  const chatInput = env.contextPanel.FindChildTraverse("ChatInput");
   const panel = env.contextPanel.FindChildTraverse("LCTSettingsPanel");
   assert("settings panel exists", !!panel);
   panel.AddClass("LCTVisible"); // 模拟面板已打开
@@ -524,9 +529,12 @@ async function test17_entryEscReleasesFocusThenClosesPanel() {
   const blurEvt = env.dispatchLog.filter((d) => d.name === "CitadelChatInputBlur");
   const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
   assert("CitadelChatInputBlur dispatched before closing", blurEvt.length >= 1, "count=" + blurEvt.length);
-  assert("DropInputFocus dispatched before closing", drops.length >= 1, "count=" + drops.length);
-  assert("DropInputFocus target is the entry", drops.length >= 1 && drops[0].target === entry,
-    drops.length ? (drops[0].target && drops[0].target._id) : "none");
+  assert("CitadelChatInputBlur targets stock ChatInput",
+    blurEvt.length >= 1 && blurEvt[0].target === chatInput,
+    blurEvt.length ? (blurEvt[0].target && blurEvt[0].target._id) : "none");
+  assert("DropInputFocus dispatched for entry", drops.some((d) => d.target === entry), "count=" + drops.length);
+  assert("DropInputFocus dispatched for stock ChatInput", drops.some((d) => d.target === chatInput),
+    "count=" + drops.length);
   assert("panel hidden after ESC", !panel._classes.has("LCTVisible"), [...panel._classes]);
   assert("no SetFocus to root after close (keyboard returns to game)",
     !env.contextPanel._focused, "root focused=" + env.contextPanel._focused);
