@@ -28,6 +28,7 @@ class MockPanel {
     this.__lctSig = undefined;
     this.__lctProcessed = false;
     this._submits = [];
+    this._focused = false;
   }
   IsValid() { return !this._deleted; }
   GetParent() { return this._parent; }
@@ -36,6 +37,7 @@ class MockPanel {
   BHasClass(c) { return this._classes.has(c); }
   AddClass(c) { this._classes.add(c); }
   RemoveClass(c) { this._classes.delete(c); }
+  SetFocus() { this._focused = true; }
   GetAttributeString(k, def) { return this._attrs[k] !== undefined ? this._attrs[k] : def; }
   SetAttributeString(k, v) { this._attrs[k] = v; }
   DeleteAsync() {
@@ -77,6 +79,12 @@ function freshEnv(cfg) {
   chatControls.addChild(new MockPanel("ChatInput"));
   chatControls.addChild(new MockPanel("LCTOutgoingFailTip"));
   chatControls.addChild(new MockPanel("LCTBridgeDot"));
+  // 设置面板(与 chat.xml 同构):TextEntry 焦点处理测试用
+  const settingsPanel = contextPanel.addChild(new MockPanel("LCTSettingsPanel"));
+  const settingsBody = settingsPanel.addChild(new MockPanel("LCTSettingsBody"));
+  settingsBody.addChild(new MockPanel("LCTEnabled"));
+  settingsBody.addChild(new MockPanel("LCTApiKey"));
+  settingsBody.addChild(new MockPanel("LCTTimeout"));
   const bridgePanel = contextPanel.addChild(new MockPanel("LCTBridgePanel"));
   // HUD 顶栏聊天(与真实 citadel_hud_top_bar_chat.vxml 同构)
   // 关键:CitadelHudTopBarChat 是面板 TYPE 不是 class → FindChildrenWithClassTraverse 找不到,
@@ -114,20 +122,24 @@ function freshEnv(cfg) {
 
   contextPanel.SetAttributeString("lct_ui", JSON.stringify(cfg)); // UI_CONVAR = "lct_ui"
 
+  // 当前"聚焦"面板(模拟 TextEntry 获得焦点) + DropInputFocus 调用记录
+  let focusedPanel = null;
+  const dispatchLog = [];
   globalThis.$ = {
     Msg: (...a) => console.log("[LCT-sim]", ...a),
     Schedule: (sec, fn) => nativeSetTimeout(fn, sec * 1000),
     CreatePanel: (type, parent, id) => parent.addChild(new MockPanel(id)).setClass(type === "Label" ? "Label" : type),
     RegisterForUnhandledEvent: () => {},
-    DispatchEvent: () => {},
-    GetContextPanel: () => contextPanel,
+    DispatchEvent: (name, target) => { dispatchLog.push({ name, target }); },
+    GetContextPanel: () => focusedPanel || contextPanel,
   };
   globalThis.Convars = { GetStr: () => "", RegisterConVar: () => {}, SetValue: () => {} };
 
   require(SCRIPT);
 
   return {
-    contextPanel, messagesPanel, hudMessages, hudMessages2,
+    contextPanel, messagesPanel, hudMessages, hudMessages2, settingsPanel, dispatchLog,
+    setFocusedPanel(p) { focusedPanel = p; },
     addRow(kind, sender, text, opts) {
       const row = new MockPanel(null).setClass("ChatMessage", "Expired");
       if (opts && opts.own) row.setClass("IsSelf");
@@ -479,6 +491,37 @@ async function test15_bridgeUpDotGreen() {
   assert("dot not fail", !dot._classes.has("LCTBridgeFail"));
 }
 
+async function test16_entryBlurDropsFocusOnEntryItself() {
+  console.log("\n[16] TextEntry blur => DropInputFocus targets the entry itself (not the container)");
+  const env = freshEnv(CFG.bilingual);
+  const entry = env.settingsPanel.FindChildTraverse("LCTApiKey");
+  assert("LCTApiKey entry exists", !!entry);
+  env.setFocusedPanel(entry); // 模拟点击输入框后焦点在 TextEntry 上
+  env.dispatchLog.length = 0;
+  globalThis.LCTEntryBlur();
+  const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
+  assert("DropInputFocus dispatched", drops.length >= 1, "count=" + drops.length);
+  assert("DropInputFocus target is the entry itself", drops.length >= 1 && drops[0].target === entry,
+    drops.length ? (drops[0].target && drops[0].target._id) : "none");
+}
+
+async function test17_entryEscReleasesFocusThenClosesPanel() {
+  console.log("\n[17] ESC in TextEntry => release focus first, then close settings panel");
+  const env = freshEnv(CFG.bilingual);
+  const entry = env.settingsPanel.FindChildTraverse("LCTTimeout");
+  const panel = env.contextPanel.FindChildTraverse("LCTSettingsPanel");
+  assert("settings panel exists", !!panel);
+  panel.AddClass("LCTVisible"); // 模拟面板已打开
+  env.setFocusedPanel(entry);
+  env.dispatchLog.length = 0;
+  globalThis.LCTEntryKey({ key: "Escape", KeyCode: 27 });
+  const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
+  assert("DropInputFocus dispatched before closing", drops.length >= 1, "count=" + drops.length);
+  assert("DropInputFocus target is the entry", drops.length >= 1 && drops[0].target === entry,
+    drops.length ? (drops[0].target && drops[0].target._id) : "none");
+  assert("panel hidden after ESC", !panel._classes.has("LCTVisible"), [...panel._classes]);
+}
+
 async function main() {
   console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
@@ -496,6 +539,8 @@ async function main() {
   await test13_outgoingWithoutGlobalSetTimeout();
   await test14_outgoingFailShowsTip();
   await test15_bridgeUpDotGreen();
+  await test16_entryBlurDropsFocusOnEntryItself();
+  await test17_entryEscReleasesFocusThenClosesPanel();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }

@@ -1402,15 +1402,16 @@
 
   // TextEntry 失焦恢复鼠标:释放输入焦点并还给面板(修复 Deadlock FPS 引擎
   // 对 TextEntry 焦点隐藏鼠标的问题——点击设置面板输入框后鼠标消失/软卡死)
+  // 参考 AnitaUI: DropInputFocus 参数必须是 TextEntry 本身(传容器面板无效)
   function LCTEntryBlur() {
+    let entry = null;
+    try { entry = $.GetContextPanel(); } catch (e) {}
+    try { $.DispatchEvent("DropInputFocus", entry || getRoot()); } catch (e) {}
+    // 兜底:调用游戏原版 ChatInput 失焦恢复(原版 ChatInput onblur 用它恢复鼠标)
+    try { if (typeof CitadelChatInputBlur === "function") CitadelChatInputBlur(); } catch (e) {}
     const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
-    try {
-      $.DispatchEvent("DropInputFocus", panel || getRoot());
-    } catch (e) {}
     if (panel && panel.SetFocus) {
-      try {
-        panel.SetFocus();
-      } catch (e) {}
+      try { panel.SetFocus(); } catch (e) {}
     }
   }
 
@@ -1420,8 +1421,8 @@
     const esc = (k === "Escape" || k === "esc" || k === 27);
     if (esc) {
       log("entry esc: closing settings");
-      closeSettingsPanel();
-      LCTEntryBlur();
+      LCTEntryBlur();        // 先释放焦点(此时面板还在, GetContextPanel 仍指向输入框)
+      closeSettingsPanel();  // 再关面板
     }
     return false;
   }
