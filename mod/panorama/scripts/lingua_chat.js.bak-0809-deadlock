@@ -14,7 +14,7 @@
   "use strict";
 
   const LOG_PREFIX = "[LCT]";
-  const VERSION = "0.1.3";;
+  const VERSION = "0.1.2";
 
   // ---- 原版聊天结构 ID(当前 Deadlock 版本稳定)----
   const CHAT_ROOT_ID = "Chat";
@@ -66,11 +66,6 @@
   const BRIDGE_PORT = 8791; // 与 core/config.json 保持一致
   const TITLE_PREFIX = "LCT";
   const TITLE_ALIVE = "lct-alive";
-  const BRIDGE_STATUS_LABEL_ID = "LCTBridgeStatusLabel";
-  const BRIDGE_HINT_LABEL_ID = "LCTBridgeHintLabel";
-  const BRIDGE_DOT_ID = "LCTBridgeDot";
-  const OUTGOING_FAIL_TIP_ID = "LCTOutgoingFailTip";
-  const DMM_HINT = "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat";
 
   // ---- 语言启发式 ----
   const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/;
@@ -94,7 +89,6 @@
     outgoingPending: null, // 发送翻译中的文本(去重:同文本重复按 Enter 忽略)
     panel: null, // 隐藏 HTML 桥面板(在 chat.xml 中用 <HTML> 标签声明)
     panelLogged: false,
-    panelDead: false, // BUGFIX 0.1.3:面板导航失败标记,下次强制重新查找
     eventsRegistered: false,
     pending: null, // 统一在途桥请求 { id, onResult, deadline, sawAlive }
     bridgeUp: false,
@@ -422,10 +416,8 @@
     }
     try {
       label.AddClass(TRANS_ERROR_CLASS);
-      label.text = "⚠ 翻译失败: " + String(message || "未知错误").slice(0, 120);
+      label.text = "翻译失败: " + String(message || "未知错误").slice(0, 120);
     } catch (e) {}
-    // 翻译失败游戏内可见:桥状态圆点闪烁黄色,提醒玩家当前翻译不工作
-    flashBridgeFail();
   }
 
   // 滚动回收重建:已翻译过的行重新出现时,从缓存恢复译文
@@ -516,10 +508,7 @@
   // HTML 桥面板:必须在 chat.xml 里用 <HTML id="LCTBridgePanel"> 声明,
   // 这里只做查找;运行时 $.CreatePanel("HTML",...) 不会得到可用的 HTML 面板。
   function ensurePanel() {
-    if (!State.panelDead && isValid(State.panel) && typeof State.panel.SetURL === "function") return State.panel;
-    // BUGFIX 0.1.3:面板曾失效(导航失败标记),强制重新查找,避免缓存死面板
-    State.panel = null;
-    State.panelDead = false;
+    if (isValid(State.panel) && typeof State.panel.SetURL === "function") return State.panel;
     const root = getRoot();
     if (!root) return null;
     State.panel = findChild(root, BRIDGE_PANEL_ID);
@@ -558,14 +547,7 @@
     if (job.kind === "outgoing") {
       // Panorama 无标准 setTimeout(8/6 崩溃根因),用 $.Schedule(单位秒);done 有 once 保护,超时与结果谁先到谁生效
       job._timeout = $.Schedule(OUTGOING_TIMEOUT_MS / 1000, function () {
-        // BUGFIX 0.1.3:超时必须同时释放队列槽位+清 pending,否则槽位卡到 15s 超时,
-        // 期间所有翻译请求排队堵死 = 用户看到的"发中文卡死,之后全失效"。
-        if (State.pending && State.pending.id === job.id) {
-          State.pending = null;
-          State.polling = false; // pollTitle 下次调度时发现无 pending 自然停止
-        }
         job.done(null, null);
-        finishJob();
       });
     }
     const url = buildBridgeUrl(job);
@@ -629,7 +611,6 @@
       id: id,
       onResult: onResult,
       deadline: nowMs() + (timeoutMs || 15000),
-      startedAt: nowMs(), // BUGFIX 0.1.3:记录发起时刻,用于导航失败快速判定
       sawAlive: false,
     };
     startTitlePolling();
@@ -711,97 +692,6 @@
       State.bridgeUp = true;
       log("bridge online");
     }
-    updateBridgeStatusUI();
-    updateBridgeDot();
-  }
-
-  // 桥状态圆点:绿=在线 / 红=离线(无失败时)
-  function updateBridgeDot() {
-    const root = getRoot();
-    const dot = root ? findChild(root, BRIDGE_DOT_ID) : null;
-    if (!dot) return;
-    try {
-      if (State.bridgeUp) {
-        dot.RemoveClass("LCTBridgeFail");
-        dot.AddClass("LCTBridgeUp");
-      } else {
-        dot.RemoveClass("LCTBridgeUp");
-        dot.RemoveClass("LCTBridgeFail");
-      }
-    } catch (e) {}
-  }
-
-  // 翻译失败闪烁:黄点提示(桥在线时短暂显示后恢复绿色)
-  function flashBridgeFail() {
-    const root = getRoot();
-    const dot = root ? findChild(root, BRIDGE_DOT_ID) : null;
-    if (!dot) return;
-    try {
-      dot.RemoveClass("LCTBridgeUp");
-      dot.AddClass("LCTBridgeFail");
-    } catch (e) {}
-    // 3.5s 后恢复(仅当桥仍在线时恢复绿;离线保持红/黄由 updateBridgeDot 决定)
-    $.Schedule(3.5, function () {
-      if (State.bridgeUp) {
-        try {
-          dot.RemoveClass("LCTBridgeFail");
-          dot.AddClass("LCTBridgeUp");
-        } catch (e) {}
-      }
-    });
-  }
-
-  // 出站翻译失败:输入框旁红色提示条(短暂显示,提醒"已发送原文")
-  function showOutgoingFailTip() {
-    const root = getRoot();
-    const tip = root ? findChild(root, OUTGOING_FAIL_TIP_ID) : null;
-    if (!tip) return;
-    try {
-      tip.text = "⚠ 翻译失败,已发送原文";
-      tip.style.visibility = "visible";
-    } catch (e) {}
-    $.Schedule(4.0, function () {
-      try {
-        tip.text = "";
-        tip.style.visibility = "collapse";
-      } catch (e) {}
-    });
-    flashBridgeFail();
-  }
-
-  // 设置面板本地桥状态行:运行中/未运行 + DMM 用户引导
-  function updateBridgeStatusUI() {
-    const root = getRoot();
-    const label = root ? findChild(root, BRIDGE_STATUS_LABEL_ID) : null;
-    if (!label) return;
-    try {
-      if (State.bridgeUp) {
-        label.text = "运行中 (端口 8791)";
-        label.RemoveClass("LCTBridgeDown");
-        label.AddClass("LCTBridgeUp");
-      } else {
-        label.text = "未运行";
-        label.RemoveClass("LCTBridgeUp");
-        label.AddClass("LCTBridgeDown");
-      }
-    } catch (e) {}
-    const hint = root ? findChild(root, BRIDGE_HINT_LABEL_ID) : null;
-    if (hint) {
-      try {
-        hint.text = State.bridgeUp ? "" : DMM_HINT;
-      } catch (e) {}
-    }
-  }
-
-  // boot 时桥缺失检测:DMM 用户装完只有面板,桥连不上 => 面板明确提示
-  function checkBridgeMissing() {
-    if (State.bridgeUp) return;
-    if (!State.panelWarned) warnBridgeOffline();
-    updateBridgeStatusUI();
-    // 30s 后仍未在线,再提示一次(用户可能正在启动桥)
-    $.Schedule(30.0, function () {
-      if (!State.bridgeUp) updateBridgeStatusUI();
-    });
   }
 
   function startTitlePolling() {
@@ -848,17 +738,6 @@
       pending.onResult(payload || { ok: false, error: "bad_bridge_payload" });
       return;
     }
-    // 导航失败快速判定:BUGFIX 0.1.3
-    // 页面 JS 加载后立即置 document.title='lct-alive',正常 <2s 内必到。
-    // 若 BRIDGE_ALIVE_SECONDS 内连 alive 都没出现 => 面板导航失败(被游戏回收/UI 重建),
-    // 立即失败并标记面板死亡,下次 ensurePanel 重新查找,而不是傻等 15s 超时。
-    if (!pending.sawAlive && nowMs() - pending.startedAt > BRIDGE_ALIVE_SECONDS * 1000) {
-      State.pending = null;
-      State.panelDead = true;
-      log("bridge nav failed: panel dead (no lct-alive within " + BRIDGE_ALIVE_SECONDS + "s)");
-      pending.onResult({ ok: false, error: "bridge_nav_failed" });
-      return;
-    }
     // 超时处理
     if (nowMs() >= pending.deadline) {
       State.pending = null;
@@ -877,9 +756,7 @@
     if (State.panelWarned) return;
     State.panelWarned = true;
     log("bridge offline: 请先启动 core/bridge_server.js(或 StartDeadlock.bat)");
-    setStatus("本地桥未运行:请运行 StartDeadlock.bat 启动桥;DMM 安装仅含面板,需完整包(GitHub)");
-    updateBridgeStatusUI();
-    updateBridgeDot();
+    setStatus("本地桥未运行:请先运行 StartDeadlock.bat");
   }
 
   function handleResult(job, payload) {
@@ -1282,9 +1159,8 @@
           if (outgoingMode === "translation") send = String(translated).trim();
           else if (outgoingMode === "bilingual") send = trimmed + " | " + String(translated).trim();
         } else if (!translated) {
-          // 翻译不可用/超时:按原文发送,但必须留日志+游戏内提示,否则用户看到原文会以为服务商坏了
+          // 翻译不可用/超时:按原文发送,但必须留日志,否则用户看到原文会以为服务商坏了
           log("outgoing: translation unavailable (timeout/error), sending original");
-          showOutgoingFailTip();
         } else if (translated === trimmed || sameLanguage(detected, outTarget)) {
           // 目标语言与原文相同(en->en 等):不发无用译文
           log("outgoing: no-op (detected=" + (detected || "unknown") + " == target), sending original");
@@ -1400,32 +1276,6 @@
     closeSettingsPanel();
   }
 
-  // TextEntry 失焦恢复鼠标:释放输入焦点并还给面板(修复 Deadlock FPS 引擎
-  // 对 TextEntry 焦点隐藏鼠标的问题——点击设置面板输入框后鼠标消失/软卡死)
-  function LCTEntryBlur() {
-    const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
-    try {
-      $.DispatchEvent("DropInputFocus", panel || getRoot());
-    } catch (e) {}
-    if (panel && panel.SetFocus) {
-      try {
-        panel.SetFocus();
-      } catch (e) {}
-    }
-  }
-
-  // TextEntry 按键处理:ESC 强制关闭面板+释放焦点(焦点在输入框时面板 oncancel 不触发)
-  function LCTEntryKey(e) {
-    const k = e && (e.key || e.KeyCode);
-    const esc = (k === "Escape" || k === "esc" || k === 27);
-    if (esc) {
-      log("entry esc: closing settings");
-      closeSettingsPanel();
-      LCTEntryBlur();
-    }
-    return false;
-  }
-
   function fieldValue(id) {
     const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
     const field = panel ? findChild(panel, id) : null;
@@ -1458,7 +1308,6 @@
     syncCustomInputs();
     closeSelectMenus();
     setStatus("");
-    updateBridgeStatusUI(); // 打开设置面板时刷新桥状态行
   }
 
   function setSelectText(buttonId, text) {
@@ -1680,49 +1529,9 @@
 
   // ================= 启动 =================
 
-  function syncBridgeConfig(callback) {
-    // BUGFIX 0.1.3:boot 时主动从桥拉取已保存配置,同步进 State.cfg,
-    // 否则游戏重启后 outgoing 等偏好回落到 UI_DEFAULTS(发送前翻译默认关)。
-    // boot 时 UI 树可能尚未构建,面板找不到会立即失败 -> 延迟重试,10s 内最多 5 次。
-    let attempts = 0;
-    const MAX_SYNC_ATTEMPTS = 5;
-    const trySync = function () {
-      attempts += 1;
-      bridgePost("config", {}, function (res) {
-        if (res && res.ok && res.config && res.config.ui) {
-          const c = res.config.ui;
-          let changed = false;
-          if (typeof c.displayMode === "string") { State.cfg.displayMode = c.displayMode; changed = true; }
-          if (typeof c.outgoing === "string") { State.cfg.outgoing = c.outgoing; changed = true; }
-          if (typeof c.outgoingTarget === "string") { State.cfg.outgoingTarget = c.outgoingTarget; changed = true; }
-          if (typeof c.targetLanguage === "string") { State.cfg.targetLanguage = c.targetLanguage; changed = true; }
-          if (typeof c.enabled === "boolean") { State.cfg.enabled = c.enabled; changed = true; }
-          if (typeof c.force === "boolean") { State.cfg.force = c.force; changed = true; }
-          if (typeof c.provider === "string") { State.cfg.provider = c.provider; changed = true; }
-          if (typeof c.timeoutMs === "number") { State.cfg.timeoutMs = c.timeoutMs; changed = true; }
-          if (changed) {
-            saveUiConfig();
-            log("boot: config synced from bridge (outgoing=" + State.cfg.outgoing + ")");
-          }
-          if (callback) callback();
-        } else if (attempts < MAX_SYNC_ATTEMPTS && !State.bridgeUp) {
-          // 面板未就绪/桥未探测到:延迟重试
-          $.Schedule(2.0, trySync);
-        } else {
-          if (callback) callback();
-        }
-      });
-    };
-    trySync();
-  }
-
   function boot() {
     State.cfg = loadUiConfig();
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
-    syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
-    updateBridgeDot(); // 初始状态:桥未上线前显示红点
-    // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引
-    $.Schedule(12.0, checkBridgeMissing);
     $.Schedule(SLOW_POLL_SECONDS, scanChatMessages);
   }
 
@@ -1741,17 +1550,12 @@
   });
   exportGlobal("LCTToggleSettings", LCTToggleSettings);
   exportGlobal("LCTCloseSettings", LCTCloseSettings);
-  exportGlobal("LCTEntryBlur", LCTEntryBlur);
-  exportGlobal("LCTEntryKey", LCTEntryKey);
   exportGlobal("LCTOnToggle", LCTOnToggle);
   exportGlobal("LCTCycle", LCTCycle);
   exportGlobal("LCTToggleMenu", LCTToggleMenu);
   exportGlobal("LCTPickLang", LCTPickLang);
   exportGlobal("LCTSave", LCTSave);
   exportGlobal("LCTTest", LCTTest);
-  // 测试/调试钩子(simtest 直接调用;游戏内无副作用)
-  exportGlobal("showOutgoingFailTip", showOutgoingFailTip);
-  exportGlobal("markBridgeUp", markBridgeUp);
 
   boot();
 })();

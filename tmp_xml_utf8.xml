@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   Babel Tower: Deadlock 聊天布局覆盖
   本文件以原版 panorama/layout/chat.xml 的反编译重建结构为基础(Valve 素材,
@@ -184,3 +184,4 @@
 		<HTML id="LCTBridgePanel" class="LCTBridgePanel" />
 	</CitadelChat>
 </root>
+
