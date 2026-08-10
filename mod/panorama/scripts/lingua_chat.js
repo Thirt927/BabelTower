@@ -1387,13 +1387,10 @@
         panel.RemoveClass(SETTINGS_VISIBLE_CLASS);
       } catch (e) {}
     }
-    // 关闭后把输入焦点还给根(AnitaUI toggle(false) 同款:DropInputFocus + root.SetFocus)
-    // 防止键盘焦点锁死在已隐藏的 TextEntry 上
-    try {
-      const root = getRoot();
-      $.DispatchEvent("DropInputFocus", panel || root);
-      if (root && root.SetFocus) root.SetFocus();
-    } catch (e) {}
+    // 注意:不要在这里 SetFocus(root)!!
+    // root 是 HUD 根面板, SetFocus 后键盘焦点被 UI 层吃掉, 游戏收不到按键
+    // (V3 实测: 鼠标恢复了但键盘死掉 —— 就是这行 root.SetFocus() 干的)
+    // 正确做法: 焦点已在 LCTEntryBlur 里通过 CitadelChatInputBlur+DropInputFocus 还给引擎
   }
 
   function LCTToggleSettings() {
@@ -1407,19 +1404,21 @@
     closeSettingsPanel();
   }
 
-  // TextEntry 失焦恢复鼠标:释放输入焦点并还给面板(修复 Deadlock FPS 引擎
-  // 对 TextEntry 焦点隐藏鼠标的问题——点击设置面板输入框后鼠标消失/软卡死)
-  // 参考 AnitaUI: DropInputFocus 参数必须是 TextEntry 本身(传容器面板无效)
+  // TextEntry 失焦恢复:释放输入焦点 + 触发引擎键盘恢复
+  // 修复 Deadlock FPS 引擎对 TextEntry 焦点隐藏鼠标的问题
+  // 关键(从原版聊天发送链路 poker_chat_debug.js 确认):
+  //   $.DispatchEvent("CitadelChatInputBlur", input);  ← 引擎注册的事件, 不是 JS 函数!
+  //   $.DispatchEvent("DropInputFocus", input);
+  // V2 的 typeof CitadelChatInputBlur === "function" 是死代码, 从不触发 → 键盘一直不恢复
   // entry 由 XML onblur="LCTEntryBlur(this)" 显式传入 = 触发事件的 TextEntry 面板
   function LCTEntryBlur(entry) {
     const target = entry || null;
-    try { $.DispatchEvent("DropInputFocus", target); } catch (e) {}
-    // 兜底:调用游戏原版 ChatInput 失焦恢复(原版 ChatInput onblur 用它恢复鼠标)
-    try { if (typeof CitadelChatInputBlur === "function") CitadelChatInputBlur(); } catch (e) {}
-    const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
-    if (panel && panel.SetFocus) {
-      try { panel.SetFocus(); } catch (e) {}
+    if (target) {
+      // 顺序与原版发送后恢复一致: 先 Blur 事件(引擎恢复键盘), 再 DropInputFocus(释放输入焦点)
+      try { $.DispatchEvent("CitadelChatInputBlur", target); } catch (e) {}
+      try { $.DispatchEvent("DropInputFocus", target); } catch (e) {}
     }
+    // 注意: 不要 SetFocus 到 settings panel —— 那会把键盘焦点留在 UI, 游戏收不到按键
   }
 
   // TextEntry 按键处理:ESC 强制关闭面板+释放焦点(焦点在输入框时面板 oncancel 不触发)
