@@ -66,6 +66,8 @@
 		<Panel id="ChatControls">
 			<Label id="ChatTargetLabel" text="#citadel_chat_placeholder" />
 			<TextEntry id="ChatInput" oninputsubmit="LCTOnChatSubmit();" onblur="CitadelChatInputBlur();" placeholder="" maxchars="1024" />
+			<Label id="LCTOutgoingFailTip" class="LCTOutgoingFailTip" text="" />
+			<Panel id="LCTBridgeDot" class="LCTBridgeDot" />
 			<Button id="LCTSettingsButton" class="LCTSettingsButton" onactivate="LCTToggleSettings();">
 				<Label text="译" />
 			</Button>

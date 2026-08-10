@@ -71,6 +71,12 @@ function freshEnv(cfg) {
   const contextPanel = new MockPanel("ContextPanel");
   const chatPanel = contextPanel.addChild(new MockPanel("Chat"));
   const messagesPanel = chatPanel.addChild(new MockPanel("ChatMessages"));
+  // ChatControls 区(输入框+桥状态圆点+出站失败提示):与 chat.xml 同构
+  const chatControls = chatPanel.addChild(new MockPanel("ChatControls"));
+  chatControls.addChild(new MockPanel("ChatTargetLabel"));
+  chatControls.addChild(new MockPanel("ChatInput"));
+  chatControls.addChild(new MockPanel("LCTOutgoingFailTip"));
+  chatControls.addChild(new MockPanel("LCTBridgeDot"));
   const bridgePanel = contextPanel.addChild(new MockPanel("LCTBridgePanel"));
   // HUD 顶栏聊天(与真实 citadel_hud_top_bar_chat.vxml 同构)
   // 关键:CitadelHudTopBarChat 是面板 TYPE 不是 class → FindChildrenWithClassTraverse 找不到,
@@ -442,6 +448,37 @@ async function test13_outgoingWithoutGlobalSetTimeout() {
   globalThis.$.DispatchEvent = origDispatch;
 }
 
+async function test14_outgoingFailShowsTip() {
+  console.log("\n[14] outgoing translate FAIL => red tip + yellow dot flash (visible feedback)");
+  const env = freshEnv(CFG.outgoingTranslation);
+  const tip = env.contextPanel.FindChildTraverse("LCTOutgoingFailTip");
+  const dot = env.contextPanel.FindChildTraverse("LCTBridgeDot");
+  assert("tip panel exists", !!tip);
+  assert("dot panel exists", !!dot);
+  assert("dot default red (no classes)", !dot._classes.has("LCTBridgeUp") && !dot._classes.has("LCTBridgeFail"));
+
+  // 直接触发出站失败提示(等价于 translateOutgoing 回调 !translated 分支)
+  globalThis.showOutgoingFailTip();
+  assert("tip text set", tip.text.indexOf("翻译失败") >= 0, tip.text);
+  assert("tip visible", tip.style.visibility === "visible", tip.style.visibility);
+  assert("dot flashed fail (yellow)", dot._classes.has("LCTBridgeFail"), [...dot._classes]);
+
+  // 4s 后提示自动消失
+  await waitFor(() => tip.style.visibility === "collapse" || tip.text === "", 6000);
+  assert("tip auto-hidden after 4s", tip.style.visibility === "collapse" || tip.text === "", tip.text + " / " + tip.style.visibility);
+}
+
+async function test15_bridgeUpDotGreen() {
+  console.log("\n[15] bridge online => dot turns green");
+  const env = freshEnv(CFG.bilingual);
+  const dot = env.contextPanel.FindChildTraverse("LCTBridgeDot");
+  assert("dot exists", !!dot);
+  // 模拟桥上线(等价于 markBridgeUp)
+  globalThis.markBridgeUp();
+  assert("dot green (LCTBridgeUp)", dot._classes.has("LCTBridgeUp"), [...dot._classes]);
+  assert("dot not fail", !dot._classes.has("LCTBridgeFail"));
+}
+
 async function main() {
   console.log("=== Babel Tower lingua_chat simulation tests v7 (bridge must run on 8791) ===");
   await test1_injectAndCollapse();
@@ -457,6 +494,8 @@ async function main() {
   await test11_hudBothTeamsFoundById();
   await test12_lcttestCommand();
   await test13_outgoingWithoutGlobalSetTimeout();
+  await test14_outgoingFailShowsTip();
+  await test15_bridgeUpDotGreen();
   console.log("\n=== RESULT: PASS " + passCount + " / FAIL " + failCount + " ===");
   process.exit(failCount === 0 ? 0 : 1);
 }

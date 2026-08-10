@@ -68,6 +68,8 @@
   const TITLE_ALIVE = "lct-alive";
   const BRIDGE_STATUS_LABEL_ID = "LCTBridgeStatusLabel";
   const BRIDGE_HINT_LABEL_ID = "LCTBridgeHintLabel";
+  const BRIDGE_DOT_ID = "LCTBridgeDot";
+  const OUTGOING_FAIL_TIP_ID = "LCTOutgoingFailTip";
   const DMM_HINT = "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat";
 
   // ---- 语言启发式 ----
@@ -420,8 +422,10 @@
     }
     try {
       label.AddClass(TRANS_ERROR_CLASS);
-      label.text = "翻译失败: " + String(message || "未知错误").slice(0, 120);
+      label.text = "⚠ 翻译失败: " + String(message || "未知错误").slice(0, 120);
     } catch (e) {}
+    // 翻译失败游戏内可见:桥状态圆点闪烁黄色,提醒玩家当前翻译不工作
+    flashBridgeFail();
   }
 
   // 滚动回收重建:已翻译过的行重新出现时,从缓存恢复译文
@@ -708,6 +712,61 @@
       log("bridge online");
     }
     updateBridgeStatusUI();
+    updateBridgeDot();
+  }
+
+  // 桥状态圆点:绿=在线 / 红=离线(无失败时)
+  function updateBridgeDot() {
+    const root = getRoot();
+    const dot = root ? findChild(root, BRIDGE_DOT_ID) : null;
+    if (!dot) return;
+    try {
+      if (State.bridgeUp) {
+        dot.RemoveClass("LCTBridgeFail");
+        dot.AddClass("LCTBridgeUp");
+      } else {
+        dot.RemoveClass("LCTBridgeUp");
+        dot.RemoveClass("LCTBridgeFail");
+      }
+    } catch (e) {}
+  }
+
+  // 翻译失败闪烁:黄点提示(桥在线时短暂显示后恢复绿色)
+  function flashBridgeFail() {
+    const root = getRoot();
+    const dot = root ? findChild(root, BRIDGE_DOT_ID) : null;
+    if (!dot) return;
+    try {
+      dot.RemoveClass("LCTBridgeUp");
+      dot.AddClass("LCTBridgeFail");
+    } catch (e) {}
+    // 3.5s 后恢复(仅当桥仍在线时恢复绿;离线保持红/黄由 updateBridgeDot 决定)
+    $.Schedule(3.5, function () {
+      if (State.bridgeUp) {
+        try {
+          dot.RemoveClass("LCTBridgeFail");
+          dot.AddClass("LCTBridgeUp");
+        } catch (e) {}
+      }
+    });
+  }
+
+  // 出站翻译失败:输入框旁红色提示条(短暂显示,提醒"已发送原文")
+  function showOutgoingFailTip() {
+    const root = getRoot();
+    const tip = root ? findChild(root, OUTGOING_FAIL_TIP_ID) : null;
+    if (!tip) return;
+    try {
+      tip.text = "⚠ 翻译失败,已发送原文";
+      tip.style.visibility = "visible";
+    } catch (e) {}
+    $.Schedule(4.0, function () {
+      try {
+        tip.text = "";
+        tip.style.visibility = "collapse";
+      } catch (e) {}
+    });
+    flashBridgeFail();
   }
 
   // 设置面板本地桥状态行:运行中/未运行 + DMM 用户引导
@@ -820,6 +879,7 @@
     log("bridge offline: 请先启动 core/bridge_server.js(或 StartDeadlock.bat)");
     setStatus("本地桥未运行:请运行 StartDeadlock.bat 启动桥;DMM 安装仅含面板,需完整包(GitHub)");
     updateBridgeStatusUI();
+    updateBridgeDot();
   }
 
   function handleResult(job, payload) {
@@ -1222,8 +1282,9 @@
           if (outgoingMode === "translation") send = String(translated).trim();
           else if (outgoingMode === "bilingual") send = trimmed + " | " + String(translated).trim();
         } else if (!translated) {
-          // 翻译不可用/超时:按原文发送,但必须留日志,否则用户看到原文会以为服务商坏了
+          // 翻译不可用/超时:按原文发送,但必须留日志+游戏内提示,否则用户看到原文会以为服务商坏了
           log("outgoing: translation unavailable (timeout/error), sending original");
+          showOutgoingFailTip();
         } else if (translated === trimmed || sameLanguage(detected, outTarget)) {
           // 目标语言与原文相同(en->en 等):不发无用译文
           log("outgoing: no-op (detected=" + (detected || "unknown") + " == target), sending original");
@@ -1633,6 +1694,7 @@
     State.cfg = loadUiConfig();
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
     syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
+    updateBridgeDot(); // 初始状态:桥未上线前显示红点
     // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引
     $.Schedule(12.0, checkBridgeMissing);
     $.Schedule(SLOW_POLL_SECONDS, scanChatMessages);
@@ -1659,6 +1721,9 @@
   exportGlobal("LCTPickLang", LCTPickLang);
   exportGlobal("LCTSave", LCTSave);
   exportGlobal("LCTTest", LCTTest);
+  // 测试/调试钩子(simtest 直接调用;游戏内无副作用)
+  exportGlobal("showOutgoingFailTip", showOutgoingFailTip);
+  exportGlobal("markBridgeUp", markBridgeUp);
 
   boot();
 })();

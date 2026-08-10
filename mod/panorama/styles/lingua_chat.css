@@ -35,6 +35,30 @@
   background-color: rgba(255, 210, 127, 0.18);
 }
 
+/* ---- 桥状态小圆点(输入框右侧,设置按钮左侧) ---- */
+.LCTBridgeDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  margin-left: 8px;
+  vertical-align: middle;
+  background-color: #ff5252; /* 默认红色:桥未运行 */
+  box-shadow: 0px 0px 6px rgba(255, 82, 82, 0.8);
+  transition-property: background-color, box-shadow;
+  transition-duration: 0.3s;
+  transition-timing-function: ease-in-out;
+}
+
+.LCTBridgeDot.LCTBridgeUp {
+  background-color: #4caf50; /* 绿色:桥运行中 */
+  box-shadow: 0px 0px 6px rgba(76, 175, 80, 0.8);
+}
+
+.LCTBridgeDot.LCTBridgeFail {
+  background-color: #ffb300; /* 黄色:翻译失败闪烁 */
+  box-shadow: 0px 0px 8px rgba(255, 179, 0, 0.9);
+}
+
 /* ---- 设置面板(默认隐藏,居中弹窗) ---- */
 .LCTSettingsPanel {
   align: center center;
@@ -334,13 +358,32 @@
   white-space: normal;
 }
 
-/* 翻译失败红字 */
+/* 翻译失败红字胶囊(⚠ + 红色背景,更醒目) */
 .LCTTranslationError {
-  color: #ff7b72;
+  color: #ff9b94;
+  background-color: rgba(180, 40, 40, 0.25);
+  border: 1px solid rgba(255, 120, 110, 0.35);
+  border-radius: 3px;
   font-size: 13px;
   margin-left: 58px;
   margin-top: 3px;
+  padding: 2px 6px;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: normal;
+}
+
+/* 出站翻译失败时输入框右侧短暂提示 */
+.LCTOutgoingFailTip {
+  background-color: rgba(180, 40, 40, 0.3);
+  border: 1px solid rgba(255, 120, 110, 0.5);
+  border-radius: 3px;
+  color: #ffb4ad;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 8px;
+  padding: 2px 6px;
+  vertical-align: middle;
+  visibility: collapse;
 }
 
 /* ---- HUD 顶栏聊天气泡内译文(citadel_hud_top_bar_chat) ----
@@ -374,7 +417,9 @@
 
 /* HUD 译文失败提示:保持深色胶囊,文字用浅红(覆盖普通行错误样式的 58px 左偏移) */
 .LCTTranslationHud.LCTTranslationError {
-  color: #ff9b94;
+  background-color: rgba(180, 40, 40, 0.45);
+  border: 1px solid rgba(255, 120, 110, 0.5);
+  color: #ffb4ad;
   margin-left: 10px;
   margin-right: 10px;
 }
