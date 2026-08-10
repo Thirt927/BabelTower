@@ -73,7 +73,7 @@
 			</Button>
 		</Panel>
 		<!-- Babel Tower 设置面板(默认隐藏,居中弹窗;ESC 关闭) -->
-		<Panel id="LCTSettingsPanel" class="LCTSettingsPanel" oncancel="LCTCloseSettings();">
+		<Panel id="LCTSettingsPanel" class="LCTSettingsPanel" canfocus="true" oncancel="LCTCloseSettings();">
 			<Panel class="LCTSettingsHeader">
 				<Label class="LCTPanelTitle" text="Babel Tower 设置" />
 				<Button id="LCTCloseBtn" class="LCTCloseButton" onactivate="LCTCloseSettings();">
@@ -101,11 +101,11 @@
 					</Panel>
 					<Panel class="LCTSettingsRow" id="LCTRowApiKey">
 						<Label class="LCTRowLabel" text="API Key(仅 Microsoft 需要)" />
-						<TextEntry id="LCTApiKey" class="LCTInput" text="" maxchars="256" onblur="LCTEntryBlur();" onkeydown="LCTEntryKey(event);" />
+						<TextEntry id="LCTApiKey" class="LCTInput" text="" maxchars="256" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow" id="LCTRowRegion">
 						<Label class="LCTRowLabel" text="区域(可选)" />
-						<TextEntry id="LCTRegion" class="LCTInput" text="" maxchars="64" onblur="LCTEntryBlur();" onkeydown="LCTEntryKey(event);" />
+						<TextEntry id="LCTRegion" class="LCTInput" text="" maxchars="64" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="目标语言(点击选择)" />
@@ -123,7 +123,7 @@
 							<Button class="LCTMenuOption" onactivate="LCTPickLang('targetLanguage','es');"><Label text="Español 西语 (es)" /></Button>
 							<Button class="LCTMenuOption" onactivate="LCTPickLang('targetLanguage','custom');"><Label text="自定义(手输语言代码)" /></Button>
 						</Panel>
-						<TextEntry id="LCTTargetLangCustom" class="LCTInput LCTCustomInput" text="" maxchars="32" onblur="LCTEntryBlur();" onkeydown="LCTEntryKey(event);" />
+						<TextEntry id="LCTTargetLangCustom" class="LCTInput LCTCustomInput" text="" maxchars="32" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="显示模式(点击切换)" />
@@ -153,11 +153,11 @@
 							<Button class="LCTMenuOption" onactivate="LCTPickLang('outgoingTarget','es');"><Label text="Español 西语 (es)" /></Button>
 							<Button class="LCTMenuOption" onactivate="LCTPickLang('outgoingTarget','custom');"><Label text="自定义(手输语言代码)" /></Button>
 						</Panel>
-						<TextEntry id="LCTOutgoingTargetCustom" class="LCTInput LCTCustomInput" text="" maxchars="32" onblur="LCTEntryBlur();" onkeydown="LCTEntryKey(event);" />
+						<TextEntry id="LCTOutgoingTargetCustom" class="LCTInput LCTCustomInput" text="" maxchars="32" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="超时(ms)" />
-						<TextEntry id="LCTTimeout" class="LCTInput" text="15000" maxchars="16" onblur="LCTEntryBlur();" onkeydown="LCTEntryKey(event);" />
+						<TextEntry id="LCTTimeout" class="LCTInput" text="15000" maxchars="16" onblur="LCTEntryBlur(this);" onkeydown="LCTEntryKey(event, this);" />
 					</Panel>
 					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="强制翻译(跳过语言判断)" />

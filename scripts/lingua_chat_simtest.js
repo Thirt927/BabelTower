@@ -498,7 +498,7 @@ async function test16_entryBlurDropsFocusOnEntryItself() {
   assert("LCTApiKey entry exists", !!entry);
   env.setFocusedPanel(entry); // 模拟点击输入框后焦点在 TextEntry 上
   env.dispatchLog.length = 0;
-  globalThis.LCTEntryBlur();
+  globalThis.LCTEntryBlur(entry);
   const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
   assert("DropInputFocus dispatched", drops.length >= 1, "count=" + drops.length);
   assert("DropInputFocus target is the entry itself", drops.length >= 1 && drops[0].target === entry,
@@ -514,7 +514,7 @@ async function test17_entryEscReleasesFocusThenClosesPanel() {
   panel.AddClass("LCTVisible"); // 模拟面板已打开
   env.setFocusedPanel(entry);
   env.dispatchLog.length = 0;
-  globalThis.LCTEntryKey({ key: "Escape", KeyCode: 27 });
+  globalThis.LCTEntryKey({ key: "Escape", KeyCode: 27 }, entry);
   const drops = env.dispatchLog.filter((d) => d.name === "DropInputFocus");
   assert("DropInputFocus dispatched before closing", drops.length >= 1, "count=" + drops.length);
   assert("DropInputFocus target is the entry", drops.length >= 1 && drops[0].target === entry,

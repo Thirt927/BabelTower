@@ -1387,6 +1387,13 @@
         panel.RemoveClass(SETTINGS_VISIBLE_CLASS);
       } catch (e) {}
     }
+    // 关闭后把输入焦点还给根(AnitaUI toggle(false) 同款:DropInputFocus + root.SetFocus)
+    // 防止键盘焦点锁死在已隐藏的 TextEntry 上
+    try {
+      const root = getRoot();
+      $.DispatchEvent("DropInputFocus", panel || root);
+      if (root && root.SetFocus) root.SetFocus();
+    } catch (e) {}
   }
 
   function LCTToggleSettings() {
@@ -1403,10 +1410,10 @@
   // TextEntry 失焦恢复鼠标:释放输入焦点并还给面板(修复 Deadlock FPS 引擎
   // 对 TextEntry 焦点隐藏鼠标的问题——点击设置面板输入框后鼠标消失/软卡死)
   // 参考 AnitaUI: DropInputFocus 参数必须是 TextEntry 本身(传容器面板无效)
-  function LCTEntryBlur() {
-    let entry = null;
-    try { entry = $.GetContextPanel(); } catch (e) {}
-    try { $.DispatchEvent("DropInputFocus", entry || getRoot()); } catch (e) {}
+  // entry 由 XML onblur="LCTEntryBlur(this)" 显式传入 = 触发事件的 TextEntry 面板
+  function LCTEntryBlur(entry) {
+    const target = entry || null;
+    try { $.DispatchEvent("DropInputFocus", target); } catch (e) {}
     // 兜底:调用游戏原版 ChatInput 失焦恢复(原版 ChatInput onblur 用它恢复鼠标)
     try { if (typeof CitadelChatInputBlur === "function") CitadelChatInputBlur(); } catch (e) {}
     const panel = findChild(getRoot(), SETTINGS_PANEL_ID);
@@ -1416,13 +1423,14 @@
   }
 
   // TextEntry 按键处理:ESC 强制关闭面板+释放焦点(焦点在输入框时面板 oncancel 不触发)
-  function LCTEntryKey(e) {
+  // entry 由 XML onkeydown="LCTEntryKey(event, this)" 显式传入 = 触发事件的 TextEntry 面板
+  function LCTEntryKey(e, entry) {
     const k = e && (e.key || e.KeyCode);
     const esc = (k === "Escape" || k === "esc" || k === 27);
     if (esc) {
       log("entry esc: closing settings");
-      LCTEntryBlur();        // 先释放焦点(此时面板还在, GetContextPanel 仍指向输入框)
-      closeSettingsPanel();  // 再关面板
+      LCTEntryBlur(entry);   // 先释放焦点(entry = 真实 TextEntry, DropInputFocus 才有效)
+      closeSettingsPanel();  // 再关面板(内部会把焦点还给根)
     }
     return false;
   }

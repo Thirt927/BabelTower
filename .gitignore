@@ -34,3 +34,9 @@ tmp_*/
 tmp_vpk_*.txt
 
 config/dictionary.json.bak
+
+tmp_*.js
+tmp_*.ps1
+tmp_*.b64
+tmp_deploy_*
+
