@@ -126,6 +126,29 @@
   margin-bottom: 4px;
 }
 
+/* 桥状态行:运行中绿色,未运行红色,提示信息弱化 */
+.LCTBridgeStatusLabel {
+  color: #9fb4d0;
+  font-size: 12px;
+  width: 100%;
+  text-overflow: shrink;
+  white-space: normal;
+}
+.LCTBridgeStatusLabel.LCTBridgeUp {
+  color: #5fd68a;
+}
+.LCTBridgeStatusLabel.LCTBridgeDown {
+  color: #ff7b72;
+}
+.LCTBridgeHint {
+  color: #8a97a8;
+  font-size: 11px;
+  width: 100%;
+  text-overflow: shrink;
+  white-space: normal;
+  margin-top: 3px;
+}
+
 /* 输入框:文字颜色显式设置(否则可能不可见) */
 .LCTInput {
   width: 100%;

@@ -81,6 +81,11 @@
 			<Panel class="LCTSettingsBody">
 				<Panel class="LCTSettingsList">
 					<Panel class="LCTSettingsRow">
+						<Label class="LCTRowLabel" text="本地桥状态" />
+						<Label id="LCTBridgeStatusLabel" class="LCTBridgeStatusLabel" text="检测中..." />
+						<Label id="LCTBridgeHintLabel" class="LCTBridgeHint" text="" />
+					</Panel>
+					<Panel class="LCTSettingsRow">
 						<Label class="LCTRowLabel" text="启用翻译" />
 						<Button id="LCTEnabled" class="LCTToggle" onactivate="LCTOnToggle('enabled');">
 							<Label id="LCTEnabledLabel" text="是" />

@@ -66,6 +66,9 @@
   const BRIDGE_PORT = 8791; // 与 core/config.json 保持一致
   const TITLE_PREFIX = "LCT";
   const TITLE_ALIVE = "lct-alive";
+  const BRIDGE_STATUS_LABEL_ID = "LCTBridgeStatusLabel";
+  const BRIDGE_HINT_LABEL_ID = "LCTBridgeHintLabel";
+  const DMM_HINT = "若通过 DMM(Deadlock Mod Manager)安装,仅有翻译面板,需另装本地桥:下载 GitHub 完整包运行 StartDeadlock.bat";
 
   // ---- 语言启发式 ----
   const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/;
@@ -704,6 +707,42 @@
       State.bridgeUp = true;
       log("bridge online");
     }
+    updateBridgeStatusUI();
+  }
+
+  // 设置面板本地桥状态行:运行中/未运行 + DMM 用户引导
+  function updateBridgeStatusUI() {
+    const root = getRoot();
+    const label = root ? findChild(root, BRIDGE_STATUS_LABEL_ID) : null;
+    if (!label) return;
+    try {
+      if (State.bridgeUp) {
+        label.text = "运行中 (端口 8791)";
+        label.RemoveClass("LCTBridgeDown");
+        label.AddClass("LCTBridgeUp");
+      } else {
+        label.text = "未运行";
+        label.RemoveClass("LCTBridgeUp");
+        label.AddClass("LCTBridgeDown");
+      }
+    } catch (e) {}
+    const hint = root ? findChild(root, BRIDGE_HINT_LABEL_ID) : null;
+    if (hint) {
+      try {
+        hint.text = State.bridgeUp ? "" : DMM_HINT;
+      } catch (e) {}
+    }
+  }
+
+  // boot 时桥缺失检测:DMM 用户装完只有面板,桥连不上 => 面板明确提示
+  function checkBridgeMissing() {
+    if (State.bridgeUp) return;
+    if (!State.panelWarned) warnBridgeOffline();
+    updateBridgeStatusUI();
+    // 30s 后仍未在线,再提示一次(用户可能正在启动桥)
+    $.Schedule(30.0, function () {
+      if (!State.bridgeUp) updateBridgeStatusUI();
+    });
   }
 
   function startTitlePolling() {
@@ -779,7 +818,8 @@
     if (State.panelWarned) return;
     State.panelWarned = true;
     log("bridge offline: 请先启动 core/bridge_server.js(或 StartDeadlock.bat)");
-    setStatus("本地桥未运行:请先运行 StartDeadlock.bat");
+    setStatus("本地桥未运行:请运行 StartDeadlock.bat 启动桥;DMM 安装仅含面板,需完整包(GitHub)");
+    updateBridgeStatusUI();
   }
 
   function handleResult(job, payload) {
@@ -1331,6 +1371,7 @@
     syncCustomInputs();
     closeSelectMenus();
     setStatus("");
+    updateBridgeStatusUI(); // 打开设置面板时刷新桥状态行
   }
 
   function setSelectText(buttonId, text) {
@@ -1592,6 +1633,8 @@
     State.cfg = loadUiConfig();
     ensureBridgeEvents(); // 尽早注册 HTML 面板事件(读回主通道)
     syncBridgeConfig(); // BUGFIX 0.1.3:启动即同步桥配置,发送前翻译不再需要先开一次设置面板
+    // DMM 用户引导:启动后 12s 桥仍未在线 => 面板显示未运行 + 安装指引
+    $.Schedule(12.0, checkBridgeMissing);
     $.Schedule(SLOW_POLL_SECONDS, scanChatMessages);
   }
 
