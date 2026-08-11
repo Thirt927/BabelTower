@@ -182,30 +182,50 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 
 - 使用 Bing 网页翻译同款协议(翻译页提取 IG/IID/token,POST `ttranslatev3`),国内直连可用
 - 无需注册;公共接口有隐形限流,出现 429 会自动重试
-- 该接口可能随微软调整而变化,届时本仓库会跟进修复
+## 推荐做法：直接编辑配置文件填写 Key
 
-### 可选:Microsoft Translator(Azure Key)
+### 1. 文件位置
 
-1. 注册 [Azure](https://azure.microsoft.com/free),创建 Translator 资源
-2. 设置面板:服务商切到 `microsoft`,填入 Key(区域按需)
-3. 点**测试**验证
+```
+BabelTower/config/config.json
+```
 
-### 可选:OpenAI 兼容接口(OpenAI / Ollama / LM Studio / OneAPI 等)
+首次运行会自动从 `config.example.json` 生成。**桥运行期间修改立即生效**（每次请求都会重新读取配置），改完保存即可，无需重启桥或游戏。
 
-- 设置面板服务商选 `OpenAI 兼容`,填入:
-  - **API Key**:OpenAI Key,或 Ollama/LM Studio 等本地服务的任意占位值(如 `ollama`)
-  - **Base URL**:默认 `https://api.openai.com/v1`;本地服务填如 `http://127.0.0.1:11434/v1`
-  - **模型名**:如 `gpt-4o-mini`、`llama3`、`qwen2.5` 等(按服务商支持的模型)
-- 也可直接在 `config/config.json` 的 `openai` 段配置
+### 2. 填写方式
 
-### 可选:DeepL
+打开 `config/config.json`，按你使用的服务商在对应位置填 Key（保留 JSON 格式：键值用双引号，末尾逗号不能乱）：
 
-- 设置面板服务商选 `DeepL`,填入 API Key;免费端点 `https://api-free.deepl.com/v2/translate`,
-  专业版换 `https://api.deepl.com/v2/translate`
+```
+{
+  "provider": "openai",
+  "openai": {
+    "apiKey": "sk-你的Key",
+    "baseUrl": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash"
+  },
+  "fallbackProviders": ["microsoft"]
+}
+```
 
-### 可选:Google Cloud Translation
+各服务商对应字段：
 
-- 设置面板服务商选 `Google Cloud`,填入 API Key(需启用 Cloud Translation API)
+| 服务商                            | provider 填   | Key 填这里         | 可选字段                         |
+| --------------------------------- | ------------- | ------------------ | -------------------------------- |
+| Bing（免 Key）                    | `"bing"`      | 无需填写           | —                                |
+| OpenAI 兼容（含 DeepSeek/Ollama） | `"openai"`    | `openai.apiKey`    | `openai.baseUrl`、`openai.model` |
+| Microsoft Azure                   | `"microsoft"` | `microsoft.apiKey` | `microsoft.region`               |
+| DeepL                             | `"deepl"`     | `deepl.apiKey`     | `deepl.endpoint`（free/pro）     |
+| Google Cloud                      | `"google"`    | `google.apiKey`    | —                                |
+
+### 3. 常见问题
+
+- **改了不生效？** 检查 JSON 语法（可用记事本打开看有没有红色波浪线），或确认 `provider` 填的是你要用的服务商。
+- **在文件里填了 Key，之后在游戏里点保存会丢吗？** 不会。面板保存时空 Key 字段不会覆盖文件里已填的 Key，只有显式清空才会删。
+- **Key 会被发出去吗？** 不会。Key 只存本地 `config.json`，游戏面板回传的是打码后的 `********`，日志也绝不输出 Key。
+- **想要主服务商失败自动切换**：在 `fallbackProviders` 里列其他服务商（只尝试已填 Key 的），例如 `["microsoft", "openai"]`。
+
+
 
 ### 服务商失败自动回退
 
@@ -214,6 +234,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 不填则失败直接返回错误。
 
 ## 聊天日志(按比赛 ID 划分)
+**目前聊天日志功能实现不完全。**
 
 - 开启后,每局聊天的消息会写入 `logs/chat/<比赛ID>.jsonl`(JSON Lines 格式),一局一个文件
 - 每条记录包含:时间、发送人昵称、英雄、英雄 ID、SteamID、频道、是否自己、消息原文
@@ -224,15 +245,7 @@ powershell -ExecutionPolicy Bypass -File scripts\autostart.ps1 -Action Install
 - 可用 `logs/chat/` 下的 JSONL 文件做赛后复盘/违规举报素材
 - 关闭:设置面板"聊天日志"开关,或 `config/config.json` 里 `chatLog.enabled=false`
 
-## 更新规划(Roadmap)
 
-> 以下为计划中的方向,尚未实现,具体以发布为准。
-
-- ~~**更多翻译接口**:Google / DeepL / OpenAI 兼容接口,主服务商失败时自动回退~~(v0.2 已实现)
-- ~~**翻译失败提示**:游戏内显示翻译失败/桥离线状态,不再静默~~(v0.2 已实现)
-- **界面多语言**:设置面板支持中/英文界面(跟随游戏语言)
-- **游戏术语表**:预置 Deadlock 常用术语翻译(push/ult/lane 等),其他语言自动学习积累
-- **Linux 移植**:支持 Steam Deck / Proton 环境
 
 ## 从源码构建 VPK
 
